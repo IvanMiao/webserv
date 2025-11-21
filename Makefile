@@ -2,7 +2,8 @@ NAME	:= webserv
 CC		:= c++
 FLAG	:= -Wall -Wextra -Werror -std=c++98
 
-SRC_FILES	:= main.cpp
+SRC_FILES	:= main.cpp \
+				server/Server.cpp
 
 SRC_DIR	:= src
 SRC		:= $(addprefix $(SRC_DIR)/, $(SRC_FILES))
