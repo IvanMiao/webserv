@@ -10,8 +10,8 @@ _port(port)
 	if (_server_fd < 0)
 		throw std::runtime_error("Error: Cannot create socket");
 	
-	_address.sin_family = AF_INET;
-	_address.sin_addr.s_addr = INADDR_ANY; // 监听所有端口，需要修改
+	_address.sin_family = AF_INET;  // IPv4
+	_address.sin_addr.s_addr = INADDR_ANY;  // 监听所有端口，需要修改
 	_address.sin_port = htons(_port);
 
 	if (bind(_server_fd, (struct sockaddr *)&_address, sizeof(_address)) < 0)
