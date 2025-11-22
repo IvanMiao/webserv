@@ -1,8 +1,11 @@
 #include "Server.hpp"
+#include <fstream>
+#include <sstream>
 
 namespace wsv
 {
 
+// Constructor
 Server::Server(int port):
 _port(port)
 {
@@ -18,12 +21,14 @@ _port(port)
 		throw std::runtime_error("Error: Cannot bind to port");
 }
 
+// Destructor
 Server::~Server()
 {
 	if (_server_fd >= 0)
 		close(_server_fd);
 }
 
+// Server start and main loop
 void Server::start()
 {
 	if (listen(_server_fd, 10) < 0)
@@ -47,12 +52,51 @@ void Server::start()
 		std::cout << "New connection accepted" << std::endl;
 
 		char buffer[1024] = {0};
-		read(client_socket, buffer, 1024); // TODO: read Request
+		read(client_socket, buffer, 1024);
 		std::cout << "--- Request ---" << std::endl << buffer << "---------------" << std::endl;
 
-		// TODO: build Reaponse and send it 
-		std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 48\r\n\r\n<html><body><h1>Hello, Browser!</h1></body></html>";
-		send(client_socket, response.c_str(), response.length(), 0);
+		std::string request_data(buffer);
+
+		// Simple Routing
+		if (request_data.find("GET /echo") != std::string::npos)
+		{
+			// Endpoint: /echo
+			// Returns the request headers as the response body
+			std::stringstream response_ss;
+			response_ss << "HTTP/1.1 200 OK\r\n";
+			response_ss << "Content-Type: text/plain\r\n";
+			response_ss << "Content-Length: " << request_data.length() << "\r\n";
+			response_ss << "Server: Webserv/1.0\r\n";
+			response_ss << "\r\n";
+			response_ss << request_data;
+
+			std::string response = response_ss.str();
+			send(client_socket, response.c_str(), response.length(), 0);
+		}
+		else
+		{
+			// Endpoint: / (or anything else)
+			// Returns index.html
+			std::ifstream file("index.html");
+			std::stringstream buffer_ss;
+			if (file)
+				buffer_ss << file.rdbuf();
+			else
+				buffer_ss << "<html><body><h1>Error: index.html not found</h1></body></html>";
+			
+			std::string html_content = buffer_ss.str();
+			
+			std::stringstream response_ss;
+			response_ss << "HTTP/1.1 200 OK\r\n";
+			response_ss << "Content-Type: text/html\r\n";
+			response_ss << "Content-Length: " << html_content.length() << "\r\n";
+			response_ss << "Server: Webserv/1.0\r\n";
+			response_ss << "\r\n";
+			response_ss << html_content;
+
+			std::string response = response_ss.str();
+			send(client_socket, response.c_str(), response.length(), 0);
+		}
 
 		close(client_socket);
 	}

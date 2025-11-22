@@ -9,7 +9,13 @@ A Nginx-like webserv in C++
 
 3. choose `poll` or `epoll`?
 
-4. a Logger? 
+4. a Logger? (DEBUG, INFO, ERROR)
+	- a simple singleton class
+
+5. HTTP Request & Response specification?
+	- [RFC 7230](https://datatracker.ietf.org/doc/html/rfc7230)
+	- [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231)
+	- state-machine based parser to handle chunked transfer encoding and partial requests
 
 ## Code Spec
 

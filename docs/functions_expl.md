@@ -33,3 +33,8 @@
 	- 向 连接socket 发送数据
 	- 处理完 HTTP 请求（比如读取了 index.html），构建好 HTTP Response 字符串后，用 send 把数据发回给浏览器。
 	- 同样受到 poll() 的限制。必须在 poll() 报告该 socket “可写 (POLLOUT)” 时才能调用 send，否则如果不小心发了太多数据塞满了缓冲区，程序会阻塞
+
+
+### Notes
+
+我们使用 sockaddr_in 来在 Server class 中储存 address。因为系统调用(bind, accept, etc.)是通用设计，他们的参数类型是通用类型 `struct sockaddr *`，而sockaddr_in 是其中一种具体实现，专门用于存放 IPv4的数据。
