@@ -52,7 +52,7 @@ void Server::start()
 		std::cout << "New connection accepted" << std::endl;
 
 		char buffer[1024] = {0};
-		read(client_socket, buffer, 1024);
+		read(client_socket, buffer, 1024); // Use epoll to be non-blocking
 		std::cout << "--- Request ---" << std::endl << buffer << "---------------" << std::endl;
 
 		std::string request_data(buffer);
