@@ -77,7 +77,7 @@ void Server::start()
 		{
 			// Endpoint: / (or anything else)
 			// Returns index.html
-			std::ifstream file("index.html");
+			std::ifstream file("./www/index.html");
 			std::stringstream buffer_ss;
 			if (file)
 				buffer_ss << file.rdbuf();
