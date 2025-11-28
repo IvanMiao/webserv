@@ -1,3 +1,5 @@
+- [HTTP Intro](https://textbook.cs168.io/applications/http.html)
+
 
 - [RFC 7230](https://datatracker.ietf.org/doc/html/rfc7230)
 - [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231)
