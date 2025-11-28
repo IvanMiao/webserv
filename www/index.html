@@ -85,7 +85,7 @@
 
             try {
                 // Fetch the echo endpoint to get the request details back
-                const response = await fetch('/echo');
+                const response = await fetch('/echo', {method: 'GET'});
                 
                 // 1. Display the Request (which the server sent back as the body)
                 const reqText = await response.text();

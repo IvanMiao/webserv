@@ -37,4 +37,21 @@
 
 ### Notes
 
-我们使用 sockaddr_in 来在 Server class 中储存 address。因为系统调用(bind, accept, etc.)是通用设计，他们的参数类型是通用类型 `struct sockaddr *`，而sockaddr_in 是其中一种具体实现，专门用于存放 IPv4的数据。
+1. 我们使用 sockaddr_in 来在 Server class 中储存 address。因为系统调用(bind, accept, etc.)是通用设计，他们的参数类型是通用类型 `struct sockaddr *`，而sockaddr_in 是其中一种具体实现，专门用于存放 IPv4 的数据。
+
+2. [socket abstraction](https://textbook.cs168.io/end-to-end/end-to-end.html)
+	> If you’re a user visiting a website in your browser, you don’t need to write any code to run the application (HTTP) over the Internet. However, if you were a programmer writing your own application, you probably need to write some code to interact with the network.
+
+	> The **socket** abstraction gives programmers a convenient way to interact with the network. The socket abstraction exists entirely in software, and there are five basic operations that programmers can run:
+
+	> We can **create** a new socket, corresponding to a new connection. In an object-oriented language like Java, this could be a constructor call.
+
+	> We can call **connect**, which initiates a TCP connection to some remote machine. This is useful if we’re the client in a client-server connection.
+
+	> We can call **listen** on a specific port. This does not start a connection, but allows others to initiate a connection with us on the specified port.
+
+	> Once the connection is open, we can call **write** to send some bytes on the connection. We can also call **read**, which takes one argument N, to read N bytes from the connection.
+
+	> This socket abstraction gives programmers a way to write applications without thinking about lower-level abstractions like TCP, IP, or Ethernet.
+
+	> From the operating system perspective, each socket is associated with a Layer 4 port number. All packets to and from a single socket have the same port number, and the operating system can use the port number to de-multiplex and send packets to the correct socket.

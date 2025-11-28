@@ -21,7 +21,7 @@ private:
 	sockaddr_in	_address;
 
 public:
-	Server(int port);
+	Server( int port );
 	~Server();
 
 	void start();
