@@ -6,7 +6,7 @@
 	- domain: AF_INET (IPv4)
 	- type: SOCK_STREAM (TCP)
 	- protocol: 0 (默认协议，即 TCP)
-	- 返回： 成功时返回一个 fd，失败返回 -1
+	- 返回： 成功时返回一个 fd(server socket)，失败返回 -1
 
 - `htons`： `uint16_t htons(uint16_t hostshort)`
 	- **H**ost **TO** **N**etwork **S**hort。将“主机字节序”（Host Byte Order）转换为“网络字节序”（Network Byte Order）。
@@ -23,14 +23,14 @@
 	- 调用后，服务器正式开始工作，可以接收 TCP 握手请求了。**注意**: 此时代码还没有阻塞，只是改变了 socket 的状态。
 
 - `accept`: `int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)`
-	- 从 listen 的队列中取出第一个等待的连接请求，并创建一个**全新的 socket** 来专门服务这个客户端。
+	- 从 listen 的队列中取出第一个等待的连接请求，并创建一个**全新的 socket** 来专门服务这个客户端。返回一个 fd(client socket)。
 	- 这里涉及两个socket： 
-		- Listening Socket: 即 socket() 创建的那个。一直处于监听状态。
-		- Connected Socket: accept() 返回的新fd。负责和某个具体的客户端进行沟通。
+		- Listening Socket/Server Socket: 即 socket() 创建的那个。一直处于监听状态。
+		- Connected Socket/Client Socket: accept() 返回的新fd。负责和某个具体的客户端进行沟通。
 	- 在 Webserv 中，不能直接阻塞在 accept 上。根据规则，需要先用 (e)poll() 监控监听 socket 。
 
 - `send`: `ssize_t send(int sockfd, const void *buf, size_t len, int flags)`
-	- 向 连接socket 发送数据
+	- 向 Client Socket 发送数据
 	- 处理完 HTTP 请求（比如读取了 index.html），构建好 HTTP Response 字符串后，用 send 把数据发回给浏览器。
 	- 同样受到 poll() 的限制。必须在 poll() 报告该 socket “可写 (POLLOUT)” 时才能调用 send，否则如果不小心发了太多数据塞满了缓冲区，程序会阻塞
 
@@ -39,7 +39,9 @@
 
 1. 我们使用 sockaddr_in 来在 Server class 中储存 address。因为系统调用(bind, accept, etc.)是通用设计，他们的参数类型是通用类型 `struct sockaddr *`，而sockaddr_in 是其中一种具体实现，专门用于存放 IPv4 的数据。
 
-2. [socket abstraction](https://textbook.cs168.io/end-to-end/end-to-end.html)
+2. 对 Client Socket，我们既会 read，又会 send。这是因为client socket关联了两个独立的缓冲区： read buffer & write buffer。
+
+3. [socket abstraction](https://textbook.cs168.io/end-to-end/end-to-end.html)
 	> If you’re a user visiting a website in your browser, you don’t need to write any code to run the application (HTTP) over the Internet. However, if you were a programmer writing your own application, you probably need to write some code to interact with the network.
 
 	> The **socket** abstraction gives programmers a convenient way to interact with the network. The socket abstraction exists entirely in software, and there are five basic operations that programmers can run:
