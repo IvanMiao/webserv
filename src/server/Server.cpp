@@ -107,7 +107,7 @@ void Server::start()
 		read(client_socket, buffer, 1024);  // Use epoll to be non-blocking
 		std::cout << "--- Request ---\n" << buffer << "---------------" << std::endl; // [DEBUG]
 
-		std::string request_data = buffer;
+		std::string request_data = buffer;  // TODO: Call HttpRequest to parse the buffer data
 		std::string response = _get_response(request_data);
 		send(client_socket, response.c_str(), response.length(), 0);
 
