@@ -1,9 +1,11 @@
 #include "HttpRequest.hpp"
 
-HttpRequest::HttpRequest(/* args */)
+HttpRequest::HttpRequest( std::string buffer )
 {
+
 }
 
 HttpRequest::~HttpRequest()
 {
+
 }

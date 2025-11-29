@@ -17,6 +17,7 @@ enum ParseState
 
 };
 
+
 class HttpRequest
 {
 private:
@@ -29,7 +30,7 @@ private:
 	std::map<std::string, std::string> _headers;
 
 public:
-	HttpRequest();
+	HttpRequest( std::string buffer );
 	~HttpRequest();
 
 	bool parseRawData( const char *data, size_t len );

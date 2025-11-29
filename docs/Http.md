@@ -1,3 +1,5 @@
+
+## Resource
 - [HTTP Intro](https://textbook.cs168.io/applications/http.html)
 
 
@@ -5,6 +7,7 @@
 - [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231)
 
 
+## Structure
 
 HTTP 报文结构：
 ```

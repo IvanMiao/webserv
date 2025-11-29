@@ -30,10 +30,13 @@ Server::~Server()
 }
 
 
-/* send Helper */
-static void _send_request(std::string request_data, int client_socket)
+/*
+TEMP: make response
+TODO: the first param -> class type HttpRequest
+*/
+static std::string _get_response(std::string request_data)
 {
-// Simple Routing
+	// Simple Routing
 	if (request_data.find("GET /echo") != std::string::npos)
 	{
 		// Endpoint: /echo
@@ -47,18 +50,19 @@ static void _send_request(std::string request_data, int client_socket)
 		response_ss << request_data;
 
 		std::string response = response_ss.str();
-		send(client_socket, response.c_str(), response.length(), 0);
+		return response;
 	}
 	else
 	{
 		// Endpoint: / (or anything else)
 		// Returns index.html
-		std::ifstream file("./www/index.html");
+		std::ifstream index_file("./www/index.html");
+		std::ifstream error_file("./www/error.html");  // Need to fix: error should be handled alone
 		std::stringstream buffer_ss;
-		if (file)
-			buffer_ss << file.rdbuf();
+		if (index_file)
+			buffer_ss << index_file.rdbuf();
 		else
-			buffer_ss << "<html><body><h1>Error: index.html not found</h1></body></html>";
+			buffer_ss << error_file.rdbuf();
 		
 		std::string html_content = buffer_ss.str();
 		
@@ -71,8 +75,8 @@ static void _send_request(std::string request_data, int client_socket)
 		response_ss << html_content;
 
 		std::string response = response_ss.str();
-		send(client_socket, response.c_str(), response.length(), 0);
-	}
+		return response;
+		}
 }
 
 
@@ -100,11 +104,12 @@ void Server::start()
 		std::cout << "New connection accepted" << std::endl; // [DEBUG]
 
 		char buffer[1024] = {0};
-		read(client_socket, buffer, 1024); // Use epoll to be non-blocking
+		read(client_socket, buffer, 1024);  // Use epoll to be non-blocking
 		std::cout << "--- Request ---\n" << buffer << "---------------" << std::endl; // [DEBUG]
 
-		std::string request_data(buffer);
-		_send_request(request_data, client_socket);
+		std::string request_data = buffer;
+		std::string response = _get_response(request_data);
+		send(client_socket, response.c_str(), response.length(), 0);
 
 		close(client_socket);
 	}
