@@ -60,7 +60,7 @@ static std::string _get_response(std::string request_data)
 		std::ifstream error_file("./www/error.html");  // Need to fix: error should be handled alone
 		std::stringstream buffer_ss;
 		if (index_file)
-			buffer_ss << index_file.rdbuf();
+			buffer_ss << index_file.rdbuf();  // Use rdbuf to read all the contents to buffer_ss
 		else
 			buffer_ss << error_file.rdbuf();
 		
