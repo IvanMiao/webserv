@@ -4,6 +4,9 @@ A Nginx-like webserv in C++
 ## TODO
 
 1. how to write a Nginx conf file? how many keywords/blocks... should we manage?
+	- Main Context: `server`
+	- Server Context: `listen`(port), `host`(host IP), `error_page` (code + route), `client_max_body_size`
+	- Location Context: `allow_methods`, `root`, `index` (default index), `return`(redirection), CGI conf
 
 2. how to initialize a server
 
@@ -20,7 +23,7 @@ A Nginx-like webserv in C++
 ## Code Spec
 
 1. 每个 header 文件有 #define Guard
-2. 每个文件(.cpp, .hpp)有 namespace 包裹， 主要的namespace为 **`wsv`**
+2. 每个文件(.cpp, .hpp)有 namespace 包裹， 主要的 namespace 为 **`wsv`**
 
 ### Names
 
