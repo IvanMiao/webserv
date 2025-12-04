@@ -57,7 +57,7 @@ static std::string _get_response(std::string request_data)
 		// Endpoint: / (or anything else)
 		// Returns index.html
 		std::ifstream index_file("./www/index.html");
-		std::ifstream error_file("./www/error.html");  // Need to fix: error should be handled alone
+		std::ifstream error_file("./www/errors/error.html");  // Need to fix: error should be handled alone
 		std::stringstream buffer_ss;
 		if (index_file)
 			buffer_ss << index_file.rdbuf();  // Use rdbuf to read all the contents to buffer_ss
@@ -116,7 +116,9 @@ void Server::start()
 					continue;
 				}
 
-				// TODO: set client_fd to non-blocking mode -> fcntl with O_NONBLOCK
+				int flags = fcntl(client_socket, F_GETFL, 0);
+				fcntl(client_socket, F_SETFL, flags | O_NONBLOCK);
+
 				struct epoll_event client_event;
 				client_event.events = EPOLLIN;
 				client_event.data.fd = client_socket;
@@ -137,8 +139,9 @@ void Server::start()
 					std::string request_data = buffer;
 					std::string response = _get_response(request_data);
 					send(client_fd, response.c_str(), response.length(), 0);
-					
+
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+					std::cout << "Client " << client_fd << " disconnected." << std::endl;
 					close(client_fd);
 				}
 				else
@@ -150,6 +153,7 @@ void Server::start()
 			}
 		}
 	}
+	close(epoll_fd);
 
 
 	// while (true)
