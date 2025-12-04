@@ -88,31 +88,95 @@ void Server::start()
 
 	std::cout << "Server is listening on port " << _port << "..." << std::endl;
 
+	// 1. create epoll fd (epoll_create)
+	int epoll_fd = epoll_create(1024); // TODO:check
+
+	// 2. listen readable event(epoll_ctl)
+	struct epoll_event event;
+	event.events = EPOLLIN;
+	event.data.fd = _server_fd;
+
+	epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _server_fd, &event); // TODO： check
+
+	struct epoll_event events[MAX_EVENTS];
+
 	while (true)
 	{
-		int client_socket;
-		socklen_t addrlen = sizeof(_address);
+		int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, TIMEOUT); // TODO: check
 
-		// create client_socket to store the Request
-		client_socket = accept(_server_fd, (struct sockaddr *)&_address, &addrlen);
-		if (client_socket < 0)
+		for (int i = 0; i < nfds; i++)
 		{
-			std::cerr << "Error: Failed to accept connection" << std::endl;
-			continue;
+			if (events[i].data.fd == _server_fd)
+			{
+				socklen_t addrlen = sizeof(_address);
+				int client_socket = accept(_server_fd, (struct sockaddr *)&_address, &addrlen);
+				if (client_socket < 0)
+				{
+					std::cerr << "Error: Faild to accept connection" << std::endl;
+					continue;
+				}
+
+				// TODO: set client_fd to non-blocking mode -> fcntl with O_NONBLOCK
+				struct epoll_event client_event;
+				client_event.events = EPOLLIN;
+				client_event.data.fd = client_socket;
+				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &client_event);
+				std::cout << "New connection accepted. Client socket fd: "  << client_socket << std::endl;
+			}
+			else if (events[i].events & EPOLLIN)
+			{
+				int client_fd = events[i].data.fd;
+				char buffer[1024] = {0};
+
+				ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+
+				if (bytes_read > 0)
+				{
+					std::cout << "----- Request from client FD " << client_fd << "-----\n"<< buffer << std::endl;
+
+					std::string request_data = buffer;
+					std::string response = _get_response(request_data);
+					send(client_fd, response.c_str(), response.length(), 0);
+					
+					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+					close(client_fd);
+				}
+				else
+				{
+					std::cout << "Client " << client_fd << " disconnected." << std::endl;
+					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+					close(client_fd);
+				}
+			}
 		}
-
-		std::cout << "New connection accepted" << std::endl; // [DEBUG]
-
-		char buffer[1024] = {0};
-		read(client_socket, buffer, 1024);  // Use epoll to be non-blocking
-		std::cout << "--- Request ---\n" << buffer << "---------------" << std::endl; // [DEBUG]
-
-		std::string request_data = buffer;  // TODO: Call HttpRequest to parse the buffer data
-		std::string response = _get_response(request_data);
-		send(client_socket, response.c_str(), response.length(), 0);
-
-		close(client_socket);
 	}
+
+
+	// while (true)
+	// {
+	// 	int client_socket;
+	// 	socklen_t addrlen = sizeof(_address);
+
+	// 	// create client_socket to store the Request
+	// 	client_socket = accept(_server_fd, (struct sockaddr *)&_address, &addrlen);
+	// 	if (client_socket < 0)
+	// 	{
+	// 		std::cerr << "Error: Failed to accept connection" << std::endl;
+	// 		continue;
+	// 	}
+
+	// 	std::cout << "New connection accepted" << std::endl; // [DEBUG]
+
+	// 	char buffer[1024] = {0};
+	// 	read(client_socket, buffer, 1024);  // Use epoll to be non-blocking
+	// 	std::cout << "--- Request ---\n" << buffer << "---------------" << std::endl; // [DEBUG]
+
+	// 	std::string request_data = buffer;  // TODO: Call HttpRequest to parse the buffer data
+	// 	std::string response = _get_response(request_data);
+	// 	send(client_socket, response.c_str(), response.length(), 0);
+
+	// 	close(client_socket);
+	// }
 }
 
 
