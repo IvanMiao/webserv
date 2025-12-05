@@ -3,7 +3,8 @@ CC		:= c++
 FLAG	:= -Wall -Wextra -Werror -std=c++98
 
 SRC_FILES	:= main.cpp \
-				server/Server.cpp
+				server/Server.cpp \
+				utils/Logger.cpp
 
 SRC_DIR	:= src
 SRC		:= $(addprefix $(SRC_DIR)/, $(SRC_FILES))

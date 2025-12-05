@@ -1,4 +1,6 @@
 #include "server/Server.hpp"
+#include "utils/Logger.hpp"
+
 #include <iostream>
 
 int	main( void )
@@ -10,7 +12,7 @@ int	main( void )
 	}
 	catch( const std::exception& e )
 	{
-		std::cerr << e.what() << '\n';
+		wsv::Logger::error(e.what());
 		return 1;
 	}
 

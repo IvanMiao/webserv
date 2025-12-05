@@ -1,4 +1,6 @@
 #include "Server.hpp"
+#include "../utils/Logger.hpp"
+
 #include <fstream>
 #include <sstream>
 
@@ -11,14 +13,14 @@ _port(port)
 {
 	_server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (_server_fd < 0)
-		throw std::runtime_error("Error: Cannot create socket");
+		throw std::runtime_error("Cannot create socket");
 	
 	_address.sin_family = AF_INET;  // IPv4
 	_address.sin_addr.s_addr = INADDR_ANY;  // 监听所有端口，需要修改
 	_address.sin_port = htons(_port);
 
 	if (bind(_server_fd, (struct sockaddr *)&_address, sizeof(_address)) < 0)
-		throw std::runtime_error("Error: Cannot bind to port");
+		throw std::runtime_error("Cannot bind to port");
 }
 
 
@@ -76,7 +78,7 @@ static std::string _get_response(std::string request_data)
 
 		std::string response = response_ss.str();
 		return response;
-		}
+	}
 }
 
 
@@ -86,7 +88,7 @@ void Server::start()
 	if (listen(_server_fd, 10) < 0)
 		throw std::runtime_error("Error: Cannot listen to socket");
 
-	std::cout << "Server is listening on port " << _port << "..." << std::endl;
+	Logger::info("Server is listening on port {} ...", _port);
 
 	// 1. create epoll fd (epoll_create)
 	int epoll_fd = epoll_create(1024); // TODO:check
@@ -112,7 +114,7 @@ void Server::start()
 				int client_socket = accept(_server_fd, (struct sockaddr *)&_address, &addrlen);
 				if (client_socket < 0)
 				{
-					std::cerr << "Error: Faild to accept connection" << std::endl;
+					Logger::error("Error: Faild to accept connection");
 					continue;
 				}
 
@@ -123,7 +125,7 @@ void Server::start()
 				client_event.events = EPOLLIN;
 				client_event.data.fd = client_socket;
 				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &client_event);
-				std::cout << "New connection accepted. Client socket fd: "  << client_socket << std::endl;
+				Logger::info("New connection accepted. Client socket fd: {}", client_socket);
 			}
 			else if (events[i].events & EPOLLIN)
 			{
@@ -134,20 +136,21 @@ void Server::start()
 
 				if (bytes_read > 0)
 				{
-					std::cout << "----- Request from client FD " << client_fd << "-----\n"<< buffer << std::endl;
-
+					Logger::info("----- Request from client FD {} -----\n{}", client_fd, buffer);
 					std::string request_data = buffer;
 					std::string response = _get_response(request_data);
 					send(client_fd, response.c_str(), response.length(), 0);
 
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-					std::cout << "Client " << client_fd << " disconnected." << std::endl;
+					Logger::info("Client {} disconnected.", client_fd);
+
 					close(client_fd);
 				}
 				else
 				{
-					std::cout << "Client " << client_fd << " disconnected." << std::endl;
+					Logger::info("Client {} disconnected.", client_fd);
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+
 					close(client_fd);
 				}
 			}
