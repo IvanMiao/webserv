@@ -10,6 +10,8 @@ namespace wsv
 Server::Server(int port):
 _port(port), _server_fd(-1), _epoll_fd(-1)
 {
+	signal(SIGPIPE, SIG_IGN);
+
 	_init_server_socket();
 	_init_epoll();
 }
@@ -63,7 +65,17 @@ void Server::_add_to_epoll(int fd, EPOLL_EVENTS events)
 	event.data.fd = fd;
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, fd, &event) < 0)
-		throw std::runtime_error("epoll_ctl failed");
+		throw std::runtime_error("epoll_ctl add failed");
+}
+
+void Server::_modify_epoll(int fd, EPOLL_EVENTS events)
+{
+	struct epoll_event event;
+	event.events = events;
+	event.data.fd = fd;
+
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, fd, &event) < 0)
+		throw std::runtime_error("epoll_ctl mod failed");
 }
 
 
@@ -131,11 +143,19 @@ void Server::start()
 		for (int i = 0; i < nfds; i++)
 		{
 			int current_fd = events[i].data.fd;
+			uint32_t events_flag = events[i].events;
 
 			if (current_fd == _server_fd)
 				_handle_new_connection();
-			else if (events[i].events & EPOLLIN)
-				_handle_client_data(current_fd);
+			else
+			{
+				// Read first, then handle Write
+				if (events_flag & EPOLLIN)
+					_handle_client_data(current_fd);
+				// _handle_client_data could close connection, so we should check if the fd is still there
+				if (_clients.find(current_fd) != _clients.end() && (events_flag & EPOLLOUT))
+					_handle_client_write(current_fd);
+			}
 		}
 	}
 }
@@ -170,18 +190,19 @@ void Server::_handle_client_data(int client_fd)
 	{
 		_clients[client_fd].request_buffer.append(buffer, bytes_read);
 
+		// HTTP end detection
 		if (_clients[client_fd].request_buffer.find("\r\n\r\n") != std::string::npos)
 		{
 			Logger::info("----- Full Request from client FD {} -----\n{}", client_fd, buffer);
-
+			
+			// 1. Handle request, generate response 
 			std::string response = _process_request(_clients[client_fd].request_buffer);
+			// 2. Save the response to Client's response_buffer
+			_clients[client_fd].response_buffer = response;
+			// 3. modify epoll to care about EPOLLOUT(write), TODO: short connection vs Keep-Alive
+			_modify_epoll(client_fd, EPOLLOUT);
 
-			send(client_fd, response.c_str(), response.length(), 0);
-
-			epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-			Logger::info("Client {} disconnected.", client_fd);
-			close(client_fd);
-			_clients.erase(client_fd);
+			Logger::info("Request received, preparing to send response...");
 		}
 	}
 	else if (bytes_read == 0)
@@ -194,6 +215,36 @@ void Server::_handle_client_data(int client_fd)
 	else
 	{
 		Logger::error("Read error on FD {}", client_fd);
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+		close(client_fd);
+		_clients.erase(client_fd);
+	}
+}
+
+void Server::_handle_client_write(int client_fd)
+{
+	Client& client = _clients[client_fd];
+	std::string& buffer = client.response_buffer;
+
+	if (buffer.empty()) return;
+
+	ssize_t bytes_sent = send(client_fd, buffer.c_str(), buffer.length(), 0);
+	if (bytes_sent < 0)
+	{
+		Logger::error("Send error on FD {}", client_fd);
+		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+		close(client_fd);
+		_clients.erase(client_fd);
+		return;
+	}
+
+	buffer.erase(0, bytes_sent);
+
+	if (buffer.empty())
+	{
+		Logger::info("Response sent fully to FD {}", client_fd);
+
+		// TODO: short-connection or Kepp-Alive
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 		close(client_fd);
 		_clients.erase(client_fd);

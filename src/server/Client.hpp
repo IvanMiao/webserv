@@ -10,6 +10,7 @@ public:
 	int			client_fd;
 	sockaddr_in	address;
 	std::string	request_buffer;
+	std::string response_buffer;
 
 public:
 	Client();

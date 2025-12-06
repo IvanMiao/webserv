@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include <cstring>
 #include <string>
@@ -35,8 +36,10 @@ private:
 	void	_init_server_socket();
 	void	_init_epoll();
 	void	_add_to_epoll(int fd, EPOLL_EVENTS events);
+	void	_modify_epoll(int fd, EPOLL_EVENTS events);
 	void	_handle_new_connection();
 	void	_handle_client_data(int client_fd);
+	void	_handle_client_write(int client_fd);
 
 	std::string	_process_request(const std::string& request_data);
 
