@@ -17,6 +17,7 @@ public:
 	std::vector<std::string>	allow_methods;
 	std::string		index;
 	bool			autoindex;
+	// ... add more params
 
 public:
 	LocationConfig();
