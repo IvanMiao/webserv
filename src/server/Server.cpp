@@ -33,7 +33,13 @@ void Server::_init_server_socket()
 	int opt = 1;
 	if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
 		throw std::runtime_error("Cannot set socket options.");
-	
+
+	int flags = fcntl(_server_fd, F_GETFL, 0);
+	if (flags == -1)
+		throw std::runtime_error("Cannot get socket flags");
+	if (fcntl(_server_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+		throw std::runtime_error("Cannot set socket to non-blocking");
+
 	_address.sin_family = AF_INET;  // IPv4
 	_address.sin_addr.s_addr = INADDR_ANY;  // 监听所有端口，需要修改
 	_address.sin_port = htons(_port);
@@ -89,7 +95,6 @@ std::string Server::_process_request(const std::string& request_data)
 	if (request_data.find("GET /echo") != std::string::npos)
 	{
 		// Endpoint: /echo
-		// Returns the request headers as the response body
 		std::stringstream response_ss;
 		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/plain\r\n"
 					<< "Content-Length: " << request_data.length() << "\r\n"
@@ -102,7 +107,7 @@ std::string Server::_process_request(const std::string& request_data)
 	else
 	{
 		// Endpoint: / (or anything else), Returns index.html
-		std::ifstream index_file("./www/index.html");
+		std::ifstream index_file(ROOT_DIR);
 		std::ifstream error_file("./www/errors/error.html");
 		std::stringstream buffer_ss;
 		if (index_file)
@@ -168,7 +173,7 @@ void Server::_handle_new_connection()
 
 	if (client_fd < 0)
 	{
-		Logger::error("Error: Faild to accept connection");
+		Logger::error("Faild to accept connection");
 		return;
 	}
 
@@ -200,7 +205,7 @@ void Server::_handle_client_data(int client_fd)
 			// 2. Save the response to Client's response_buffer
 			_clients[client_fd].response_buffer = response;
 			// 3. modify epoll to care about EPOLLOUT(write), TODO: short connection vs Keep-Alive
-			_modify_epoll(client_fd, EPOLLOUT);
+			_modify_epoll(client_fd, static_cast<EPOLL_EVENTS>(EPOLLIN | EPOLLOUT));
 
 			Logger::info("Request received, preparing to send response...");
 		}

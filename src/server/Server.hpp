@@ -17,6 +17,7 @@
 #include "Client.hpp"
 
 #define MAX_EVENTS	1024
+#define	ROOT_DIR	"./www/index.html"
 
 namespace wsv
 {
