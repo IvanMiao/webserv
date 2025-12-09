@@ -142,16 +142,16 @@ void Server::start()
 					send(client_fd, response.c_str(), response.length(), 0);
 
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-					Logger::info("Client {} disconnected.", client_fd);
+					//Logger::info("Client {} disconnected.", client_fd);
 
-					close(client_fd);
+					//close(client_fd);
 				}
 				else
 				{
-					Logger::info("Client {} disconnected.", client_fd);
+					//Logger::info("Client {} disconnected.", client_fd);
 					epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 
-					close(client_fd);
+					//close(client_fd);
 				}
 			}
 		}
