@@ -18,8 +18,10 @@ _port(port), _server_fd(-1), _epoll_fd(-1)
 
 Server::~Server()
 {
-	if (_server_fd >= 0) close(_server_fd);
-	if (_epoll_fd >= 0) close(_epoll_fd);
+	if (_server_fd >= 0)
+		close(_server_fd);
+	if (_epoll_fd >= 0)
+		close(_epoll_fd);
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
 		close(it->first);
 }
@@ -41,7 +43,7 @@ void Server::_init_server_socket()
 		throw std::runtime_error("Cannot set socket to non-blocking");
 
 	_address.sin_family = AF_INET;  // IPv4
-	_address.sin_addr.s_addr = INADDR_ANY;  // 监听所有端口，需要修改
+	_address.sin_addr.s_addr = INADDR_ANY;  // [TODO]: modify(?)
 	_address.sin_port = htons(_port);
 
 	if (bind(_server_fd, (struct sockaddr *)&_address, sizeof(_address)) < 0)
@@ -249,7 +251,7 @@ void Server::_handle_client_write(int client_fd)
 	{
 		Logger::info("Response sent fully to FD {}", client_fd);
 
-		// TODO: short-connection or Kepp-Alive
+		// [TODO]: short-connection or Kepp-Alive
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 		close(client_fd);
 		_clients.erase(client_fd);
