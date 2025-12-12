@@ -49,8 +49,10 @@ const LocationConfig* ServerConfig::findLocation(const std::string& path) const
             path.substr(0, loc_path.size()) == loc_path)
         {
             // 确保是完整路径匹配
-            // 例如: /upload 不应该匹配 /uploads
-            if (path.size() == loc_path.size() || 
+            // 1. 如果 loc_path 以 '/' 结尾 (如 "/" 或 "/images/")，则前缀匹配就足够了
+            // 2. 否则，必须是完全匹配，或者 path 的下一个字符是 '/' (如 "/upload" 匹配 "/upload/file")
+            if ((!loc_path.empty() && loc_path[loc_path.size() - 1] == '/') || 
+                path.size() == loc_path.size() || 
                 path[loc_path.size()] == '/')
             {
                 if (loc_path.size() > best_length)
@@ -87,27 +89,26 @@ void ConfigParser::parse()
     std::string line;
     while (std::getline(file, line))
     {
-        line = trim(line);
+        line = _trim(line);
         
         // 跳过空行和注释
         if (line.empty() || line[0] == '#')
             continue;
         
         // 找到 server 块
-        if (startsWith(line, "server"))
+        if (_startsWith(line, "server"))
         {
-            parseServerBlock(file, line);
+            _parseServerBlock(file, line);
         }
     }
     
     file.close();
     
     if (_servers.empty())
-    {
         throw std::runtime_error("Error: No server configuration found");
-    }
 }
-void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
+
+void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 {
     ServerConfig server;
     
@@ -116,7 +117,7 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
     {
         // 读取下一行找 '{'
         std::getline(file, line);
-        line = trim(line);
+        line = _trim(line);
         if (line != "{")
         {
             throw std::runtime_error("Error: Expected '{' after 'server'");
@@ -126,7 +127,7 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
     // 解析 server 块内容
     while (std::getline(file, line))
     {
-        line = trim(line);
+        line = _trim(line);
         
         if (line.empty() || line[0] == '#')
             continue;
@@ -139,11 +140,11 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
         }
         
         // listen 127.0.0.1:8080;
-        if (startsWith(line, "listen"))
+        if (_startsWith(line, "listen"))
         {
             std::string value = line.substr(6);  // 跳过 "listen"
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
             size_t colon_pos = value.find(':');
             if (colon_pos != std::string::npos)
@@ -160,13 +161,13 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
             }
         }
         // server_name localhost example.com;
-        else if (startsWith(line, "server_name"))
+        else if (_startsWith(line, "server_name"))
         {
             std::string value = line.substr(11);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
-            std::vector<std::string> names = split(value, " \t");
+            std::vector<std::string> names = _split(value, " \t");
             for (size_t i = 0; i < names.size(); i++)
             {
                 if (!names[i].empty())
@@ -174,28 +175,28 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
             }
         }
         // root /var/www/html;
-        else if (startsWith(line, "root"))
+        else if (_startsWith(line, "root"))
         {
             std::string value = line.substr(4);
-            value = trim(value);
-            server.root = removeSemicolon(value);
+            value = _trim(value);
+            server.root = _removeSemicolon(value);
         }
         // client_max_body_size 10M;
-        else if (startsWith(line, "client_max_body_size"))
+        else if (_startsWith(line, "client_max_body_size"))
         {
             std::string value = line.substr(20);
-            value = trim(value);
-            value = removeSemicolon(value);
-            server.client_max_body_size = parseSize(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
+            server.client_max_body_size = _parseSize(value);
         }
         // error_page 404 /404.html;
-        else if (startsWith(line, "error_page"))
+        else if (_startsWith(line, "error_page"))
         {
             std::string value = line.substr(10);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
-            std::vector<std::string> parts = split(value, " \t");
+            std::vector<std::string> parts = _split(value, " \t");
             if (parts.size() >= 2)
             {
                 int code = std::atoi(parts[0].c_str());
@@ -203,30 +204,28 @@ void ConfigParser::parseServerBlock(std::ifstream& file, std::string& line)
             }
         }
         // location / {
-        else if (startsWith(line, "location"))
-        {
-            parseLocationBlock(file, line, server);
-        }
+        else if (_startsWith(line, "location"))
+            _parseLocationBlock(file, line, server);
     }
     
     // 如果到达文件末尾还没有找到 '}'
     _servers.push_back(server);
 }
 
-void ConfigParser::parseLocationBlock(std::ifstream& file, std::string& line,
+void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
                                      ServerConfig& server)
 {
     LocationConfig location;
     
     // 提取路径: location /uploads {
     std::string value = line.substr(8);  // 跳过 "location"
-    value = trim(value);
+    value = _trim(value);
     
     // 移除 '{'
     size_t brace_pos = value.find('{');
     if (brace_pos != std::string::npos)
     {
-        location.path = trim(value.substr(0, brace_pos));
+        location.path = _trim(value.substr(0, brace_pos));
     }
     else
     {
@@ -238,7 +237,7 @@ void ConfigParser::parseLocationBlock(std::ifstream& file, std::string& line,
     // 解析 location 块内容
     while (std::getline(file, line))
     {
-        line = trim(line);
+        line = _trim(line);
         
         if (line.empty() || line[0] == '#')
             continue;
@@ -251,23 +250,23 @@ void ConfigParser::parseLocationBlock(std::ifstream& file, std::string& line,
         }
         
         // root /var/www/uploads;
-        if (startsWith(line, "root"))
+        if (_startsWith(line, "root"))
         {
             std::string value = line.substr(4);
-            value = trim(value);
-            location.root = removeSemicolon(value);
+            value = _trim(value);
+            location.root = _removeSemicolon(value);
         }
         // allow_methods GET POST DELETE;
-        else if (startsWith(line, "allow_methods") || 
-                 startsWith(line, "allowed_methods"))
+        else if (_startsWith(line, "allow_methods") || 
+                 _startsWith(line, "allowed_methods"))
         {
             size_t pos = line.find("methods");
             std::string value = line.substr(pos + 7);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
             location.allow_methods.clear();
-            std::vector<std::string> methods = split(value, " \t");
+            std::vector<std::string> methods = _split(value, " \t");
             for (size_t i = 0; i < methods.size(); i++)
             {
                 if (!methods[i].empty())
@@ -275,33 +274,33 @@ void ConfigParser::parseLocationBlock(std::ifstream& file, std::string& line,
             }
         }
         // index index.html index.htm;
-        else if (startsWith(line, "index"))
+        else if (_startsWith(line, "index"))
         {
             std::string value = line.substr(5);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
             // 取第一个 index 文件
-            std::vector<std::string> indexes = split(value, " \t");
+            std::vector<std::string> indexes = _split(value, " \t");
             if (!indexes.empty())
                 location.index = indexes[0];
         }
         // autoindex on;
-        else if (startsWith(line, "autoindex"))
+        else if (_startsWith(line, "autoindex"))
         {
             std::string value = line.substr(9);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             location.autoindex = (value == "on");
         }
         // return 301 /new-path;
-        else if (startsWith(line, "return"))
+        else if (_startsWith(line, "return"))
         {
             std::string value = line.substr(6);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             
-            std::vector<std::string> parts = split(value, " \t");
+            std::vector<std::string> parts = _split(value, " \t");
             if (parts.size() >= 2)
             {
                 location.redirect_code = std::atoi(parts[0].c_str());
@@ -309,34 +308,34 @@ void ConfigParser::parseLocationBlock(std::ifstream& file, std::string& line,
             }
         }
         // upload_path /var/www/uploads;
-        else if (startsWith(line, "upload_path"))
+        else if (_startsWith(line, "upload_path"))
         {
             std::string value = line.substr(11);
-            value = trim(value);
-            location.upload_path = removeSemicolon(value);
+            value = _trim(value);
+            location.upload_path = _removeSemicolon(value);
             location.upload_enable = true;
         }
         // upload_enable on;
-        else if (startsWith(line, "upload_enable"))
+        else if (_startsWith(line, "upload_enable"))
         {
             std::string value = line.substr(13);
-            value = trim(value);
-            value = removeSemicolon(value);
+            value = _trim(value);
+            value = _removeSemicolon(value);
             location.upload_enable = (value == "on");
         }
         // cgi_extension .py;
-        else if (startsWith(line, "cgi_extension"))
+        else if (_startsWith(line, "cgi_extension"))
         {
             std::string value = line.substr(13);
-            value = trim(value);
-            location.cgi_extension = removeSemicolon(value);
+            value = _trim(value);
+            location.cgi_extension = _removeSemicolon(value);
         }
         // cgi_path /usr/bin/python3;
-        else if (startsWith(line, "cgi_path"))
+        else if (_startsWith(line, "cgi_path"))
         {
             std::string value = line.substr(8);
-            value = trim(value);
-            location.cgi_path = removeSemicolon(value);
+            value = _trim(value);
+            location.cgi_path = _removeSemicolon(value);
         }
     }
     
@@ -350,7 +349,7 @@ const std::vector<ServerConfig>& ConfigParser::getServers() const
 
 // ==================== 工具方法 ====================
 
-std::string ConfigParser::trim(const std::string& str) const
+std::string ConfigParser::_trim(const std::string& str) const
 {
     size_t start = 0;
     size_t end = str.size();
@@ -364,7 +363,7 @@ std::string ConfigParser::trim(const std::string& str) const
     return str.substr(start, end - start);
 }
 
-std::vector<std::string> ConfigParser::split(const std::string& str,
+std::vector<std::string> ConfigParser::_split(const std::string& str,
                                              const std::string& delimiters) const
 {
     std::vector<std::string> result;
@@ -400,7 +399,7 @@ std::vector<std::string> ConfigParser::split(const std::string& str,
     return result;
 }
 
-size_t ConfigParser::parseSize(const std::string& str) const
+size_t ConfigParser::_parseSize(const std::string& str) const
 {
     if (str.empty())
         return 0;
@@ -439,7 +438,7 @@ size_t ConfigParser::parseSize(const std::string& str) const
     return value;
 }
 
-bool ConfigParser::startsWith(const std::string& str, 
+bool ConfigParser::_startsWith(const std::string& str, 
                               const std::string& prefix) const
 {
     if (str.size() < prefix.size())
@@ -448,19 +447,21 @@ bool ConfigParser::startsWith(const std::string& str,
     return str.substr(0, prefix.size()) == prefix;
 }
 
-std::string ConfigParser::removeSemicolon(const std::string& str) const
+std::string ConfigParser::_removeSemicolon(const std::string& str) const
 {
     std::string result = str;
     
     // 移除末尾的分号
     while (!result.empty() && result[result.size() - 1] == ';')
-    {
         result.erase(result.size() - 1);
-    }
     
-    return trim(result);
+    return _trim(result);
 }
 
+
+/*
+FOR TESTING
+*/
 void ConfigParser::printConfig() const
 {
     std::cout << "=== Configuration ===" << std::endl;
