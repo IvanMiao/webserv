@@ -45,3 +45,17 @@ public:
 };
 } // namespace wsv
 ```
+
+## Run test for unit
+CgiHandler:
+```
+g++ -Wall -Wextra -Werror \
+    -I./src/cgi -I./src/http -I./src/config -I./test \
+    ./test/test_main.cpp \
+    ./test/CgiHandlerTest.cpp \
+    ./src/cgi/CgiHandler.cpp \
+    ./src/http/HttpRequest.cpp \
+    ./src/http/HttpResponse.cpp \
+    ./src/config/ConfigParser.cpp \
+    -o webserv_tests
+```
