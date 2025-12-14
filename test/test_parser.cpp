@@ -14,10 +14,10 @@ int main(int argc, char** argv)
         ConfigParser parser(argv[1]);
         parser.parse();
         
-        // 打印配置
+        // Print configuration
         parser.printConfig();
         
-        // 测试 location 匹配
+        // Test location matching
         std::cout << "\n=== Testing Location Matching ===" << std::endl;
         
         const std::vector<ServerConfig>& servers = parser.getServers();
@@ -42,18 +42,13 @@ int main(int argc, char** argv)
                 
                 std::cout << "Path: " << path << " -> ";
                 if (loc)
-                {
                     std::cout << "Location: " << loc->path << std::endl;
-                }
                 else
-                {
                     std::cout << "No matching location" << std::endl;
-                }
             }
         }
         
         std::cout << "\nConfig parsing successful!" << std::endl;
-        
     }
     catch (const std::exception& e)
     {
