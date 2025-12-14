@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <map>
 
+#include "../config/ConfigParser.hpp" 
+#include "../http/HttpRequest.hpp" 
 #include "Client.hpp"
 
 #define MAX_EVENTS	1024
@@ -25,7 +27,8 @@ namespace wsv
 class Server
 {
 private:
-	int			_port;
+	const ServerConfig&         _config;    // <--- **新增：存储 Server 的配置数据**
+	//int			_port;
 	int			_server_fd;
 	int			_epoll_fd;
 	sockaddr_in	_address;
@@ -42,10 +45,15 @@ private:
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
 
-	std::string	_process_request(const std::string& request_data);
+	//std::string	_process_request(const std::string& request_data);
+	std::string _process_request(const HttpRequest& request); // <--- **签名修改**
+	// 并且我们不再需要 Client::request_buffer.find("\r\n\r\n") 
+    // 而是直接使用已解析的请求
+
 
 public:
-	Server( int port );
+	Server( const ServerConfig& config );
+	//Server( int port );
 	~Server();
 
 	void start();

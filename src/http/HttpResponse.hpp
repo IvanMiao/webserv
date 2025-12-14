@@ -5,6 +5,9 @@
 #include <map>
 #include <vector>
 
+namespace wsv
+{
+
 class HttpResponse
 {
 public:
@@ -46,6 +49,8 @@ private:
     // 默认 Header
     void _setDefaultHeaders();
 };
+
+} // namespace wsv
 
 #endif // HTTP_RESPONSE_HPP
 

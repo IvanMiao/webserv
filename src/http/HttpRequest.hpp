@@ -6,6 +6,9 @@
 #include <vector>
 #include <cstddef>
 
+namespace wsv
+{
+
 enum ParseState
 {
     PARSING_REQUEST_LINE,
@@ -19,6 +22,7 @@ class HttpRequest
 {
 public:
     HttpRequest();
+    HttpRequest(const std::string& raw_request);
     ~HttpRequest();
 
     // Incremental parse
@@ -82,6 +86,8 @@ private:
     static const size_t MAX_HEADER_SIZE = 8192;
     static const size_t MAX_REQUEST_LINE_SIZE = 2048;
 };
+
+} // namespace wsv
 
 #endif
 

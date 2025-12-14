@@ -9,6 +9,9 @@
 #include <string>
 #include <map>
 
+namespace wsv
+{
+
 class RequestHandler
 {
 public:
@@ -69,5 +72,7 @@ private:
 
     HttpResponse _getErrorPage(int code);
 };
+
+} // namespace wsv
 
 #endif // REQUEST_HANDLER_HPP

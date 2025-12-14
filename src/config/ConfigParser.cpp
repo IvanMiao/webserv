@@ -3,6 +3,8 @@
 #include <cstdlib> 
 #include <algorithm>
 
+using namespace wsv;
+
 // ==================== LocationConfig ====================
 LocationConfig::LocationConfig() 
     : path("/") 

@@ -1,45 +1,93 @@
-NAME	:= webserv
-CC		:= c++
-FLAG	:= -Wall -Wextra -Werror -std=c++98
+# --- Variables ---
+NAME        := webserv
+CC          := c++
+FLAG        := -Wall -Wextra -Werror -std=c++98
+LIBS        := -lstdc++ -lrt # Needed for POSIX features (epoll, socket, etc.)
 
-SRC_FILES	:= main.cpp \
-				config/ConfigParser.cpp \
-				server/Server.cpp server/Client.cpp \
-				utils/Logger.cpp
+# --- Directory Setup ---
+SRC_DIR     := src
+OBJ_DIR     := obj
+TEST_DIR    := test
 
-SRC_DIR	:= src
-SRC		:= $(addprefix $(SRC_DIR)/, $(SRC_FILES))
+# --- Server Source Files ---
+# List all core .cpp files relative to SRC_DIR
+SERVER_SRC_FILES := main.cpp \
+                    cgi/CgiHandler.cpp \
+                    config/ConfigParser.cpp \
+                    http/HttpRequest.cpp \
+                    http/HttpResponse.cpp \
+                    http/RequestHandler.cpp \
+                    server/Server.cpp \
+                    server/Client.cpp \
+                    utils/Logger.cpp
 
-OBJ_DIR	:= obj
-OBJ		:= $(addprefix $(OBJ_DIR)/,$(SRC_FILES:%.cpp=%.o))
+SERVER_SRC  := $(addprefix $(SRC_DIR)/, $(SERVER_SRC_FILES))
+SERVER_OBJ  := $(addprefix $(OBJ_DIR)/, $(SERVER_SRC_FILES:%.cpp=%.o))
 
-TEST_NAME	:= test_parser
-TEST_SRC	:= test/test_parser.cpp src/config/ConfigParser.cpp
+# --- Test Variables ---
+TEST_NAME   := webserv_tests
+# All test files + all core server files needed for linking
+TEST_SRC_FILES := $(TEST_DIR)/test_main.cpp \
+                  $(TEST_DIR)/CgiHandlerTest.cpp \
+                  $(TEST_DIR)/test_parser.cpp \
+                  $(SERVER_SRC) \
+                  $(SRC_DIR)/utils/Logger.cpp # Logger needs to be explicitly included if not already in SERVER_SRC
+
+# --- Header Inclusion Paths (-I flags) ---
+# This is crucial for compilation
+INCLUDES    := -I $(SRC_DIR) \
+               -I $(SRC_DIR)/cgi \
+               -I $(SRC_DIR)/config \
+               -I $(SRC_DIR)/http \
+               -I $(SRC_DIR)/server \
+               -I $(SRC_DIR)/utils \
+               -I $(TEST_DIR)
+
+# --- Targets ---
 
 all: $(NAME)
 
-$(NAME): $(OBJ)
-	$(CC) $(FLAG) $(OBJ) -o $(NAME)
+# Main Server Executable (Final Link)
+$(NAME): $(SERVER_OBJ)
+	$(CC) $(FLAG) $(SERVER_OBJ) $(LIBS) -o $(NAME)
 
-# ----- Test -----
-check: $(TEST_NAME)
-	./$(TEST_NAME) test/test.conf
-
-$(TEST_NAME): $(TEST_SRC)
-	$(CC) $(FLAG) -I src/config $(TEST_SRC) -o $(TEST_NAME)
-
-
+# Rule to compile object files
+# Uses the comprehensive INCLUDES list
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CC) $(FLAG) -c $< -o $@
+	$(CC) $(FLAG) $(INCLUDES) -c $< -o $@
+
+# ----------------------------------------------------
+# Testing Targets
+# ----------------------------------------------------
+
+# Full Test Runner: Compiles all tests and server source, then runs the executable
+test: $(TEST_NAME)
+	./$(TEST_NAME)
+
+# Test Executable (Linking tests and all server logic)
+$(TEST_NAME): $(SERVER_OBJ) $(TEST_SRC_FILES)
+	$(CC) $(FLAG) $(INCLUDES) $(TEST_SRC_FILES) $(LIBS) -o $(TEST_NAME)
+
+# Legacy Config Parser Test (Retained your original 'check' target logic)
+check: test_parser
+	./test_parser test/test.conf
+
+test_parser: $(TEST_DIR)/test_parser.cpp $(SRC_DIR)/config/ConfigParser.cpp
+	$(CC) $(FLAG) -I $(SRC_DIR)/config -I $(TEST_DIR) $^ -o $@
+
+# ----------------------------------------------------
+# Clean Targets
+# ----------------------------------------------------
 
 clean:
 	rm -rf $(OBJ_DIR)
 
 fclean: clean
-	rm -rf $(NAME)
-	rm -rf $(TEST_NAME)
+	rm -f $(NAME)
+	rm -f $(TEST_NAME)
+	rm -f test_parser
 
 re: fclean all
 
-.PHONY: all clean fclean re check
+.PHONY: all clean fclean re test check

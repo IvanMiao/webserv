@@ -2,6 +2,9 @@
 #include <sstream>
 #include <ctime>
 
+namespace wsv
+{
+
 HttpResponse::HttpResponse()
     : _status_code(200),
       _version("HTTP/1.1")
@@ -185,5 +188,7 @@ std::string HttpResponse::getStatusMessage(int code)
         default:  return "Unknown";
     }
 }
+
+} // namespace wsv
 
 

@@ -15,6 +15,9 @@
 #include <iostream>
 #include <stdexcept>
 
+namespace wsv
+{
+
 // ========================================
 // Fictional Utility Functions (Need to be defined globally or in another utility file)
 // ========================================
@@ -515,3 +518,5 @@ HttpResponse RequestHandler::_getErrorPage(int code)
 
     return response;
 }
+
+} // namespace wsv

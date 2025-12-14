@@ -8,7 +8,8 @@
 #include <fstream>
 #include <sstream>
 
-
+namespace wsv
+{
 class LocationConfig
 {
 public:
@@ -94,5 +95,6 @@ public:
 	 // 配置打印, 调试输出
     void printConfig() const;
 };
+}
 
 #endif

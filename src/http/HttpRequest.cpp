@@ -4,6 +4,9 @@
 #include <sstream>
 #include <iostream>
 
+namespace wsv
+{
+
 HttpRequest::HttpRequest()
     : _state(PARSING_REQUEST_LINE),
       _content_length(0),
@@ -11,6 +14,21 @@ HttpRequest::HttpRequest()
       _chunk_size(0),
       _chunk_finished(true)
 {
+}
+
+HttpRequest::HttpRequest(const std::string& raw_request) 
+    : _state(PARSING_REQUEST_LINE), _content_length(0), 
+      _body_received(0), _chunk_size(0), _chunk_finished(false)
+{
+    // 调用解析函数，将整个原始请求作为数据传入
+    ParseState result = parse(raw_request.c_str(), raw_request.length());
+    
+    // 如果请求没有完全解析完毕，抛出异常或进行处理
+    if (result != PARSE_COMPLETE)
+    {
+        // 假设您有一个适当的异常类
+        throw std::runtime_error("Incomplete or malformed request provided to constructor.");
+    }
 }
 
 HttpRequest::~HttpRequest()
@@ -266,3 +284,5 @@ std::string HttpRequest::_toLower(const std::string& str) const
         result[i] = static_cast<char>(tolower(result[i]));
     return result;
 }
+
+} // namespace wsv
