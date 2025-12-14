@@ -3,7 +3,7 @@ CC		:= c++
 FLAG	:= -Wall -Wextra -Werror -std=c++98
 
 SRC_FILES	:= main.cpp \
-				server/Server.cpp \
+				server/Server.cpp server/Client.cpp \
 				utils/Logger.cpp
 
 SRC_DIR	:= src
