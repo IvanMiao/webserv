@@ -44,6 +44,7 @@ const LocationConfig* ServerConfig::findLocation(const std::string& path) const
     for (size_t i = 0; i < locations.size(); i++)
     {
         const LocationConfig& loc = locations[i];
+        std::cerr << "[DEBUG] Try match location: " << loc.path << std::endl;
         const std::string& loc_path = loc.path;
         
         // 检查是否是前缀匹配
@@ -296,17 +297,52 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
             location.autoindex = (value == "on");
         }
         // return 301 /new-path;
+        // else if (_startsWith(line, "return"))
+        // {
+        //     std::string value = line.substr(6);
+        //     value = _trim(value);
+        //     value = _removeSemicolon(value);
+            
+        //     std::vector<std::string> parts = _split(value, " \t");
+        //     if (parts.size() >= 2)
+        //     {
+        //         location.redirect_code = std::atoi(parts[0].c_str());
+        //         location.redirect_url = parts[1];
+        //     }
+        // }
+        // return 301 /new-path;
         else if (_startsWith(line, "return"))
         {
+            // --- 打印 1: 原始行 ---
+            fprintf(stderr, "\n[DEBUG CONFIG] Return line: '%s'\n", line.c_str());
+
             std::string value = line.substr(6);
             value = _trim(value);
+            
+            // --- 打印 2: Substr & Trim 后的值 ---
+            fprintf(stderr, "[DEBUG CONFIG] Trimmed value (pre-semicolon): '%s'\n", value.c_str());
+
             value = _removeSemicolon(value);
             
+            // --- 打印 3: 移除分号后的最终值 ---
+            fprintf(stderr, "[DEBUG CONFIG] Final value for split: '%s'\n", value.c_str());
+            
             std::vector<std::string> parts = _split(value, " \t");
+            
+            // --- 打印 4: 分割结果 ---
+            fprintf(stderr, "[DEBUG CONFIG] Parts size: %zu\n", parts.size());
+            
             if (parts.size() >= 2)
             {
                 location.redirect_code = std::atoi(parts[0].c_str());
                 location.redirect_url = parts[1];
+                
+                // --- 打印 5: 最终存储的值 ---
+                fprintf(stderr, "[DEBUG CONFIG] Storing code %d and URL '%s'\n",
+                        location.redirect_code, location.redirect_url.c_str());
+            }
+            else {
+                fprintf(stderr, "[DEBUG CONFIG] ERROR: Split failed! Parts size < 2.\n");
             }
         }
         // upload_path /var/www/uploads;

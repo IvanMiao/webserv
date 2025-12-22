@@ -9,7 +9,7 @@ int tests_failed = 0;
 // 外部声明所有测试运行函数
 void run_all_cgi_tests();
 // void run_all_request_handler_tests(); // 如果有 RequestHandlerTest.cpp
-
+void run_config_parser_tests(const std::string& config_file);
 // ----------------------------------------------------
 // 主测试函数
 // ----------------------------------------------------
@@ -19,6 +19,7 @@ int main() {
 
     // 调用所有测试套件的运行函数
     run_all_cgi_tests();
+    run_config_parser_tests("test/test.conf"); // Config parser tests
     // run_all_request_handler_tests(); 
 
     // ----------------------------------------------------

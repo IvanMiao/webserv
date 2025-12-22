@@ -1,7 +1,9 @@
 #include "Server.hpp"
 #include "../utils/Logger.hpp"
 #include "../http/HttpRequest.hpp"
+#include "../http/HttpResponse.hpp"
 #include "../config/ConfigParser.hpp"
+#include "../request/RequestHandler.hpp"
 #include "Client.hpp" // Client class definition
 
 #include <stdexcept>
@@ -11,6 +13,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <signal.h>
 #include <fstream>
@@ -33,6 +36,9 @@ Server::Server(const ServerConfig& config)
     // 忽略 SIGPIPE 信号，防止在向已关闭连接写入时进程崩溃
     signal(SIGPIPE, SIG_IGN);
 
+    // 初始化所有 location 的上传文件夹
+    _initializeUploadDirectories();
+
     _init_server_socket();
     _init_epoll();
 }
@@ -52,6 +58,35 @@ Server::~Server()
 // --------------------------------------------------------------------------
 // 初始化
 // --------------------------------------------------------------------------
+
+void Server::_initializeUploadDirectories()
+{
+    // 遍历所有 location 配置，创建上传目录
+    for (size_t i = 0; i < _config.locations.size(); ++i)
+    {
+        const LocationConfig& loc = _config.locations[i];
+        
+        // 如果此 location 启用了上传功能
+        if (loc.upload_enable && !loc.upload_path.empty())
+        {
+            // 使用 mkdir 递归创建目录（需要处理多级路径）
+            if (mkdir(loc.upload_path.c_str(), 0755) == 0)
+            {
+                Logger::info("Created upload directory: {}", loc.upload_path);
+            }
+            else if (errno == EEXIST)
+            {
+                // 目录已存在，这是正常情况
+                Logger::info("Upload directory already exists: {}", loc.upload_path);
+            }
+            else
+            {
+                // 创建失败但不中止服务器启动
+                Logger::warning("Failed to create upload directory: " + loc.upload_path);
+            }
+        }
+    }
+}
 
 void Server::_init_server_socket()
 {
@@ -135,64 +170,12 @@ void Server::_modify_epoll(int fd, EPOLL_EVENTS events)
 */
 std::string Server::_process_request(const HttpRequest& request)
 {
-    // 1. 查找最佳匹配的 location 块
-    const LocationConfig* location = _config.findLocation(request.getPath());
+    // Use RequestHandler to process the request
+    RequestHandler handler(_config);
+    HttpResponse response = handler.handleRequest(request);
     
-    if (!location)
-    {
-        // 找不到匹配的 location，返回 404
-        return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"; 
-    }
-
-    // 2. 检查方法是否允许
-    if (!location->isMethodAllowed(request.getMethod()))
-    {
-        // 方法不允许，返回 405 Method Not Allowed
-        return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
-    }
-
-    // 3. 处理重定向
-    if (location->hasRedirect())
-    {
-        std::stringstream response_ss;
-        response_ss << "HTTP/1.1 " << location->redirect_code << " " 
-                    << "Moved Permanently" << "\r\n"
-                    << "Location: " << location->redirect_url << "\r\n"
-                    << "Content-Length: 0\r\n\r\n";
-        return response_ss.str();
-    }
-    
-    // [TODO]: 4. 检查 Body Size (使用 _config.client_max_body_size)
-    
-    // [TODO]: 5. 调用 ResponseHandler (或直接处理静态文件/CGI)
-    
-    // --- 临时静态文件服务逻辑 (替换原 _process_request 中的硬编码) ---
-    std::string file_path = location->root + request.getPath();
-    if (request.getPath() == "/")
-        file_path += location->index;
-
-    // 修正: 必须使用 .c_str()
-    std::ifstream file(file_path.c_str()); 
-    std::stringstream buffer_ss;
-
-    
-    if (file)
-    {
-        buffer_ss << file.rdbuf();
-        std::string html_content = buffer_ss.str();
-        
-        std::stringstream response_ss;
-        response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/html\r\n"
-                    << "Content-Length: " << html_content.length() << "\r\n"
-                    << "Server: Webserv/1.0\r\n" << "\r\n"
-                    << html_content;
-        return response_ss.str();
-    }
-    else
-    {
-        // 文件未找到，返回 404 
-        return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-    }
+    // Convert HttpResponse to HTTP response string
+    return response.serialize();
 }
 
 // --------------------------------------------------------------------------
@@ -286,11 +269,9 @@ void Server::_handle_client_data(int client_fd)
         client.request_buffer.append(buffer, bytes_read);
 
         // --- HTTP 结束检测 ---
-        // 简单检测 CRLF CRLF (Header 结束)
-        if (client.request_buffer.find("\r\n\r\n") != std::string::npos)
+        // 检查是否已收到完整的 HTTP 请求（包括 body）
+        if (_is_request_complete(client.request_buffer))
         {
-            // [TODO]: 完整的请求结束检测还需要考虑 Content-Length 或 Chunked 编码
-
             Logger::info("----- Full Request from client FD {} -----\n{}", client_fd, client.request_buffer);
             
             try {
@@ -369,5 +350,73 @@ void Server::_handle_client_write(int client_fd)
     }
 }
 
+/**
+ * Check if a complete HTTP request has been received
+ * Returns true if headers are complete and body (if any) is fully received
+ */
+bool Server::_is_request_complete(const std::string& request_buffer)
+{
+    // First, check if headers are complete (look for \r\n\r\n)
+    size_t headers_end = request_buffer.find("\r\n\r\n");
+    if (headers_end == std::string::npos)
+    {
+        // Headers not complete yet
+        return false;
+    }
+    
+    // Headers are complete. Now check if body is complete
+    headers_end += 4; // Move past \r\n\r\n
+    
+    // Extract Content-Length from headers
+    size_t content_length_pos = request_buffer.find("Content-Length:");
+    if (content_length_pos == std::string::npos)
+    {
+        // No Content-Length header, request is complete (headers only)
+        return true;
+    }
+    
+    // Parse Content-Length value
+    content_length_pos += 15; // Length of "Content-Length:"
+    
+    // Skip whitespace
+    while (content_length_pos < request_buffer.length() && 
+           (request_buffer[content_length_pos] == ' ' || request_buffer[content_length_pos] == '\t'))
+    {
+        content_length_pos++;
+    }
+    
+    // Extract the number
+    size_t number_end = content_length_pos;
+    while (number_end < request_buffer.length() && 
+           request_buffer[number_end] >= '0' && request_buffer[number_end] <= '9')
+    {
+        number_end++;
+    }
+    
+    if (number_end == content_length_pos)
+    {
+        // Could not parse Content-Length value
+        return false;
+    }
+    
+    std::string content_length_str = request_buffer.substr(content_length_pos, number_end - content_length_pos);
+    size_t content_length = 0;
+    for (size_t i = 0; i < content_length_str.length(); i++)
+    {
+        content_length = content_length * 10 + (content_length_str[i] - '0');
+    }
+    
+    // Check if we have received the full body
+    size_t body_received = request_buffer.length() - headers_end;
+    
+    if (body_received >= content_length)
+    {
+        // Full body has been received
+        return true;
+    }
+    
+    // Still waiting for more body data
+    return false;
+}
 
 } // namespace wsv

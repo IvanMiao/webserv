@@ -79,4 +79,8 @@ extern int tests_total;
 extern int tests_passed;
 extern int tests_failed;
 
+// Test function declarations
+void run_all_cgi_tests();
+void run_config_parser_tests(const std::string& config_file);
+
 #endif // TEST_UTILS_HPP

@@ -37,6 +37,7 @@ private:
 
 private:
 	// helper functions
+	void	_initializeUploadDirectories();
 	void	_init_server_socket();
 	void	_init_epoll();
 	void	_add_to_epoll(int fd, EPOLL_EVENTS events);
@@ -44,6 +45,7 @@ private:
 	void	_handle_new_connection();
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
+	bool	_is_request_complete(const std::string& request_buffer);
 
 	//std::string	_process_request(const std::string& request_data);
 	std::string _process_request(const HttpRequest& request); // <--- **签名修改**
