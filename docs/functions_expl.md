@@ -17,7 +17,7 @@
 	- addr: 一个结构体，包含 IP（通常是 INADDR_ANY，表示接受本机所有网卡的连接）和端口（经过 htons 处理的）。
 
 - `listen`: `int listen(int sockfd, int backlog)`
-	- 将 socket 标记为“被动”状态，准备接受传入的连接请求。它还会设置一个“排队队列”(backlog)。
+	- 将 socket 标记为“被动”状态，准备接受传入的连接请求。它还会设置一个“排队队列”(backlog)，`backlog`指定连接队列的最大长度。
 	- 调用后，服务器正式开始工作，可以接收 TCP 握手请求了。**注意**: 此时代码还没有阻塞，只是改变了 socket 的状态。
 
 - `accept`: `int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)`
@@ -40,7 +40,9 @@
 	- 计算机存储数字的方式不同（有的从低位开始存，有的从高位开始存）。网络协议规定统一使用“大端序”（Big Endian）。如果你的电脑是“小端序”（如 x86 架构），直接发送端口号 8080，网络对面读出来的可能是另一个数字。htons 负责这个翻译。
 	- 在设置服务器监听端口（如 8080）时，必须用它包裹端口号。
 
-- `setsockopt`
+- `setsockopt`: `setsockopt(int fd, int level, int optname, void *optval, socklen_t optlen)`
+	- 在本项目用于端口复用(`SO_REUSEADDR`)。如果关闭服务器立刻重启，可能会报 Address already in use, 因为 TCP_TIME_WAIT 状态会占用端口几分钟时间。
+
 
 
 

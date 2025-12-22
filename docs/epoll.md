@@ -41,3 +41,21 @@ Epoll 的真正的魔法在于其基于回调（Callback）的事件通知机制
 对于已建立的客户端连接，服务器根据事件类型进行状态流转。当 `EPOLLIN` 事件触发时，`_handle_client_data` 函数读取客户端发送的 HTTP 请求报文。值得注意的是，本项目采用了 epoll 的默认模式——水平触发（Level Triggered, LT）。这意味着只要接收缓冲区中还有数据未读完，epoll 就会不断通知我们。当请求读取完毕并生成响应后，服务器并不立即发送，而是通过 `_modify_epoll` 函数修改该 FD 的监听事件，将关注点从纯粹的读取（`EPOLLIN`）变为读取与写入（`EPOLLIN | EPOLLOUT`）。
 
 当 socket 发送缓冲区可写时，`EPOLLOUT` 事件被触发，程序进入 `_handle_client_write` 函数发送 HTTP 响应数据。这种“读-处理-写”的分离设计保证了服务器不会因为向慢速客户端发送大数据而阻塞整个线程。一旦响应数据发送完毕，服务器会通过 `epoll_ctl` 的 `EPOLL_CTL_DEL` 操作将该 FD 从 epoll 监控中移除，并关闭连接，从而完成一次完整的 HTTP 请求处理周期。这种严谨的生命周期管理确保了系统资源能够被及时回收，避免了文件描述符泄漏的风险。
+
+
+## Epoll 函数
+
+- `int epoll_create(int size)` -> `epoll_fd`:
+	- 在内核开辟一块内存区域，存 `eventpoll` 结构体。
+	- 初始化epoll的红黑树(存监控的socket)和就绪链表(双向链表，存就绪的事件)
+	- size 参数现在已经被内核忽略，大于0即可
+
+- `int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)`
+	- 将server_fd 加入 epoll 监控
+	- 参数`op`： EPOLL_CTL_ADD (添加), EPOLL_CTL_MOD (修改), EPOLL_CTL_DEL (删除)
+	- 参数 `event`: 一个结构体，包含关心的事件（EPOLLIN | EPOLLOUT）和 用户数据（通常存 fd）
+	- 内核动作： ADD：在红黑树插入节点，并注册回调函数 ep_poll_callback。MOD：修改红黑树节点中的关注事件（如从“只读”改为“读写”）。
+
+- `int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)`
+	- 内核动作： 检查 eventpoll 对象的就绪链表。如果链表为空：挂起当前线程（阻塞），直到超时或有事件触发回调。如果链表不空：将链表中的事件数据拷贝到用户态的 events 数组中。
+	- 返回 就绪事件的数量 n。用户只需要遍历 events[0] 到 events[n-1]。
