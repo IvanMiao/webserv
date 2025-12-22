@@ -102,7 +102,7 @@ void Server::start()
 	}
 }
 
-void Server::_add_to_epoll(int fd, EPOLL_EVENTS events)
+void Server::_add_to_epoll(int fd, uint32_t events)
 {
 	struct epoll_event event;
 	event.events = events;
@@ -112,7 +112,7 @@ void Server::_add_to_epoll(int fd, EPOLL_EVENTS events)
 		throw std::runtime_error("epoll_ctl add failed");
 }
 
-void Server::_modify_epoll(int fd, EPOLL_EVENTS events)
+void Server::_modify_epoll(int fd, uint32_t events)
 {
 	struct epoll_event event;
 	event.events = events;
