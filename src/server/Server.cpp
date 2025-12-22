@@ -199,13 +199,14 @@ void Server::_handle_client_data(int client_fd)
 		// HTTP end detection
 		if (_clients[client_fd].request_buffer.find("\r\n\r\n") != std::string::npos)
 		{
-            Logger::info("----- Full Request from client FD {} -----\n{}", client_fd, _clients[client_fd].request_buffer);
+            Logger::info("----- Full Request from client FD {} -----\n{}",
+						client_fd, _clients[client_fd].request_buffer);
 			
 			// 1. Handle request, generate response 
 			std::string response = _process_request(_clients[client_fd].request_buffer);
 			// 2. Save the response to Client's response_buffer
 			_clients[client_fd].response_buffer = response;
-			// 3. modify epoll to care about EPOLLOUT(write), TODO: short connection vs Keep-Alive
+			// 3. modify epoll to care about EPOLLOUT(write), [TODO]: short connection vs Keep-Alive
 			_modify_epoll(client_fd, static_cast<EPOLL_EVENTS>(EPOLLIN | EPOLLOUT));
 
 			Logger::info("Request received, preparing to send response...");
@@ -232,7 +233,8 @@ void Server::_handle_client_write(int client_fd)
 	Client& client = _clients[client_fd];
 	std::string& buffer = client.response_buffer;
 
-	if (buffer.empty()) return;
+	if (buffer.empty())
+		return;
 
 	ssize_t bytes_sent = send(client_fd, buffer.c_str(), buffer.length(), 0);
 	if (bytes_sent < 0)
