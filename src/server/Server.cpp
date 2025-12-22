@@ -66,6 +66,42 @@ void Server::_init_epoll()
 	_add_to_epoll(_server_fd, EPOLLIN);
 }
 
+/* Server start and main loop */
+void Server::start()
+{
+	struct epoll_event events[MAX_EVENTS];
+
+	while (true)
+	{
+		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
+		if (nfds < 0)
+		{
+			if (errno == EINTR)
+				continue;
+			Logger::error("epoll_wait error");
+			break;
+		}
+
+		for (int i = 0; i < nfds; i++)
+		{
+			int current_fd = events[i].data.fd;
+			uint32_t events_flag = events[i].events;
+
+			if (current_fd == _server_fd)
+				_handle_new_connection();
+			else
+			{
+				// Read first, then handle Write
+				if (events_flag & EPOLLIN)
+					_handle_client_data(current_fd);
+				// _handle_client_data could close connection, so we should check if the fd is still there
+				if (_clients.find(current_fd) != _clients.end() && (events_flag & EPOLLOUT))
+					_handle_client_write(current_fd);
+			}
+		}
+	}
+}
+
 void Server::_add_to_epoll(int fd, EPOLL_EVENTS events)
 {
 	struct epoll_event event;
@@ -127,43 +163,6 @@ std::string Server::_process_request(const std::string& request_data)
 
 		std::string response = response_ss.str();
 		return response;
-	}
-}
-
-
-/* Server start and main loop */
-void Server::start()
-{
-	struct epoll_event events[MAX_EVENTS];
-
-	while (true)
-	{
-		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
-		if (nfds < 0)
-		{
-			if (errno == EINTR)
-				continue;
-			Logger::error("epoll_wait error");
-			break;
-		}
-
-		for (int i = 0; i < nfds; i++)
-		{
-			int current_fd = events[i].data.fd;
-			uint32_t events_flag = events[i].events;
-
-			if (current_fd == _server_fd)
-				_handle_new_connection();
-			else
-			{
-				// Read first, then handle Write
-				if (events_flag & EPOLLIN)
-					_handle_client_data(current_fd);
-				// _handle_client_data could close connection, so we should check if the fd is still there
-				if (_clients.find(current_fd) != _clients.end() && (events_flag & EPOLLOUT))
-					_handle_client_write(current_fd);
-			}
-		}
 	}
 }
 
