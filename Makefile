@@ -5,7 +5,7 @@ FLAG	:= -Wall -Wextra -Werror -std=c++98
 SRC_FILES	:= main.cpp \
 				config/ConfigParser.cpp \
 				server/Server.cpp server/Client.cpp \
-				utils/Logger.cpp
+				utils/Logger.cpp utils/StringUtils.cpp
 
 SRC_DIR	:= src
 SRC		:= $(addprefix $(SRC_DIR)/, $(SRC_FILES))
@@ -14,7 +14,7 @@ OBJ_DIR	:= obj
 OBJ		:= $(addprefix $(OBJ_DIR)/,$(SRC_FILES:%.cpp=%.o))
 
 TEST_NAME	:= test_parser
-TEST_SRC	:= test/test_parser.cpp src/config/ConfigParser.cpp
+TEST_SRC	:= test/test_parser.cpp src/config/ConfigParser.cpp src/utils/StringUtils.cpp
 
 all: $(NAME)
 
