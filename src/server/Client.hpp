@@ -22,6 +22,7 @@ public:
 	sockaddr_in	address;
 	std::string	request_buffer;
 	std::string response_buffer;
+
 	ClientState	state;
 	const std::vector<ServerConfig>* configs; // Associated server configs for the port
 
