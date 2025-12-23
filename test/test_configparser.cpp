@@ -1,6 +1,60 @@
-#include "ConfigParser.hpp"
+#include "../src/config/ConfigParser.hpp"
 #include <iostream>
 #include <cassert>
+#include <vector>
+#include <string>
+#include <map>
+
+// ANSI color codes for test output
+#define GREEN "\033[32m"
+#define RED "\033[31m"
+#define YELLOW "\033[33m"
+#define RESET "\033[0m"
+#define BOLD "\033[1m"
+
+class TestRunner
+{
+private:
+	int _passed;
+	int _failed;
+	std::string _current_test;
+
+public:
+	TestRunner() : _passed(0), _failed(0) {}
+
+	void startTest(const std::string& name)
+	{
+		_current_test = name;
+		std::cout << YELLOW << "[TEST] " << RESET << name << " ... ";
+		std::cout.flush();
+	}
+
+	void pass()
+	{
+		std::cout << GREEN << "PASS" << RESET << std::endl;
+		_passed++;
+	}
+
+	void fail(const std::string& msg)
+	{
+		std::cout << RED << "FAIL" << RESET << std::endl;
+		std::cout << "  Error: " << msg << std::endl;
+		_failed++;
+	}
+
+	void summary()
+	{
+		std::cout << std::endl << BOLD << "=== Test Summary ===" << RESET << std::endl;
+		std::cout << "Total: " << (_passed + _failed) << " tests" << std::endl;
+		std::cout << GREEN << "Passed: " << _passed << RESET << std::endl;
+		if (_failed > 0)
+			std::cout << RED << "Failed: " << _failed << RESET << std::endl;
+		else
+			std::cout << "Failed: " << _failed << std::endl;
+	}
+
+	bool allPassed() const { return _failed == 0; }
+};
 
 static void printConfig(const std::vector<wsv::ServerConfig>& servers)
 {
@@ -47,6 +101,40 @@ static void printConfig(const std::vector<wsv::ServerConfig>& servers)
 	}
 }
 
+void test_location_matching(TestRunner& runner, const wsv::ServerConfig& server)
+{
+	runner.startTest("Location Matching");
+	try {
+		struct {
+			std::string path;
+			std::string expected;
+		} test_cases[] = {
+			{"/", "/"},
+			{"/index.html", "/"},
+			{"/uploads", "/uploads"},
+			{"/uploads/file.txt", "/uploads"},
+			{"/old-page", "/old-page"},
+			{"/cgi-bin/script.py", "/cgi-bin"},
+			{"/nonexistent", "/"}
+		};
+		
+		for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++)
+		{
+			const wsv::LocationConfig* loc = server.findLocation(test_cases[i].path);
+			if (loc == NULL) {
+				throw std::runtime_error("Location not found for path: " + test_cases[i].path);
+			}
+			if (loc->path != test_cases[i].expected) {
+				throw std::runtime_error("Expected location " + test_cases[i].expected + " for path " + test_cases[i].path + ", but got " + loc->path);
+			}
+			// std::cout << "Path: " << test_cases[i].path << " -> Location: " << loc->path << std::endl;
+		}
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
 int main(int argc, char** argv)
 {
 	if (argc != 2)
@@ -55,10 +143,14 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	
+	TestRunner runner;
+
 	try
 	{
+		runner.startTest("Config Parsing");
 		wsv::ConfigParser parser(argv[1]);
 		parser.parse();
+		runner.pass();
 		
 		// Print configuration
 		printConfig(parser.getServers());
@@ -69,36 +161,19 @@ int main(int argc, char** argv)
 		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
 		if (!servers.empty())
 		{
-			const wsv::ServerConfig& server = servers[0];
-			
-			struct {
-				std::string path;
-				std::string expected;
-			} test_cases[] = {
-				{"/", "/"},
-				{"/index.html", "/"},
-				{"/uploads", "/uploads"},
-				{"/uploads/file.txt", "/uploads"},
-				{"/old-page", "/old-page"},
-				{"/cgi-bin/script.py", "/cgi-bin"},
-				{"/nonexistent", "/"}
-			};
-			
-			for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++)
-			{
-				const wsv::LocationConfig* loc = server.findLocation(test_cases[i].path);
-				assert(loc != NULL && loc->path == test_cases[i].expected);
-				std::cout << "Path: " << test_cases[i].path << " -> Location: " << loc->path << std::endl;
-			}
+			test_location_matching(runner, servers[0]);
 		}
-		
-		std::cout << "\nConfig parsing successful!" << std::endl;
+		else
+		{
+			runner.startTest("Server Count");
+			runner.fail("No servers found in configuration");
+		}
 	}
 	catch (const std::exception& e)
 	{
-		std::cerr << "Error: " << e.what() << std::endl;
-		return 1;
+		runner.fail(std::string("Exception: ") + e.what());
 	}
-	
-	return 0;
+
+	runner.summary();
+	return runner.allPassed() ? 0 : 1;
 }
