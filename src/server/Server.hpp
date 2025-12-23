@@ -59,6 +59,7 @@ private:
 	Server(const Server&);
 	Server& operator=(const Server&);
 
+protected:
 	// helper functions
 	void	_init_listening_sockets();
 	void	_init_epoll();

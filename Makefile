@@ -14,7 +14,9 @@ OBJ_DIR	:= obj
 OBJ		:= $(addprefix $(OBJ_DIR)/,$(SRC_FILES:%.cpp=%.o))
 
 TEST_PARSER		:= test_parser
-TEST_PARSER_SRC	:= test/test_parser.cpp src/config/ConfigParser.cpp src/utils/StringUtils.cpp
+TEST_PARSER_SRC	:= test/test_configparser.cpp \
+				   src/config/ConfigParser.cpp \
+				   src/utils/StringUtils.cpp
 
 TEST_SERVER		:= test_server
 TEST_SERVER_SRC	:= test/test_server.cpp \
@@ -31,16 +33,13 @@ $(NAME): $(OBJ)
 
 # ----- Test -----
 check: $(TEST_PARSER) $(TEST_SERVER)
-	@echo "Running parser tests..."
+	@echo "----- Running parser tests... -----"
 	./$(TEST_PARSER) test/test.conf
-	@echo ""
-	@echo "Running server tests..."
+	@echo "\n----- Running server tests... -----"
 	./$(TEST_SERVER)
 
-test: $(TEST_SERVER)
+test-server: $(TEST_SERVER)
 	./$(TEST_SERVER)
-
-test-all: check
 
 $(TEST_PARSER): $(TEST_PARSER_SRC)
 	$(CC) $(FLAG) -I src/config $(TEST_PARSER_SRC) -o $(TEST_PARSER)
@@ -63,4 +62,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re check test test-all
+.PHONY: all clean fclean re check test-server

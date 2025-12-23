@@ -11,9 +11,6 @@ Server::Server(ConfigParser& config):
 _config(config), _epoll_fd(-1)
 {
 	signal(SIGPIPE, SIG_IGN);
-
-	_init_listening_sockets();
-	_init_epoll();
 }
 
 Server::~Server()
@@ -121,6 +118,9 @@ void Server::_init_epoll()
 */
 void Server::start()
 {
+	_init_listening_sockets();
+	_init_epoll();
+
 	struct epoll_event events[MAX_EVENTS];
 
 	while (true)
