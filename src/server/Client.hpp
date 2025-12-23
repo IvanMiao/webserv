@@ -8,6 +8,13 @@
 
 namespace wsv {
 
+enum ClientState
+{
+	CLIENT_READING_REQUEST,
+	CLIENT_PROCESSING,
+	CLIENT_WRITING_RESPONSE
+};
+
 class Client
 {
 public:
@@ -15,6 +22,7 @@ public:
 	sockaddr_in	address;
 	std::string	request_buffer;
 	std::string response_buffer;
+	ClientState	state;
 	const std::vector<ServerConfig>* configs; // Associated server configs for the port
 
 public:

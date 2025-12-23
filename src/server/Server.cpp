@@ -40,47 +40,7 @@ void Server::_init_listening_sockets()
 
 		if (host_port_to_fd.find(key) == host_port_to_fd.end())
 		{
-			int fd = socket(AF_INET, SOCK_STREAM, 0);
-			if (fd < 0)
-				throw std::runtime_error("Cannot create socket");
-			
-			int opt = 1;
-			if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-				throw std::runtime_error("Cannot set socket options.");
-
-			int flags = fcntl(fd, F_GETFL, 0);
-			if (flags == -1)
-				throw std::runtime_error("Cannot get socket flags");
-			if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
-				throw std::runtime_error("Cannot set socket to non-blocking");
-
-			struct addrinfo hints = {};
-			struct addrinfo *res;
-			hints.ai_family = AF_INET;
-			hints.ai_socktype = SOCK_STREAM;
-
-			std::string port_str = StringUtils::toString(conf.listen_port);
-			int status = getaddrinfo(conf.host.c_str(), port_str.c_str(), &hints, &res);
-			if (status != 0)
-			{
-				close(fd);
-				throw std::runtime_error("getaddrinfo failed for " + conf.host + ": " + gai_strerror(status));
-			}
-
-			if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
-			{
-				freeaddrinfo(res);
-				close(fd);
-				throw std::runtime_error("Cannot bind to " + conf.host + ":" + StringUtils::toString(conf.listen_port));
-			}
-			freeaddrinfo(res);
-			
-			if (listen(fd, 10) < 0)
-			{
-				close(fd);
-				throw std::runtime_error("Cannot listen on socket");
-			}
-
+			int fd = _create_listening_socket(conf.host, conf.listen_port);
 			host_port_to_fd[key] = fd;
 			_listen_fds[fd] = std::vector<ServerConfig>();
 			Logger::info("Server is listening on {}:{} ...", conf.host, conf.listen_port);
@@ -89,9 +49,64 @@ void Server::_init_listening_sockets()
 	}
 }
 
+int Server::_create_listening_socket(const std::string& host, int port)
+{
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0)
+		throw std::runtime_error("Cannot create socket");
+	
+	int opt = SOCKET_REUSE_OPT;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot set socket options.");
+	}
+
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags == -1)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot get socket flags");
+	}
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot set socket to non-blocking");
+	}
+
+	struct addrinfo hints = {};
+	struct addrinfo *res;
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+
+	std::string port_str = StringUtils::toString(port);
+	int status = getaddrinfo(host.c_str(), port_str.c_str(), &hints, &res);
+	if (status != 0)
+	{
+		close(fd);
+		throw std::runtime_error("getaddrinfo failed for " + host + ": " + gai_strerror(status));
+	}
+
+	if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
+	{
+		freeaddrinfo(res);
+		close(fd);
+		throw std::runtime_error("Cannot bind to " + host + ":" + StringUtils::toString(port));
+	}
+	freeaddrinfo(res);
+	
+	if (listen(fd, LISTEN_BACKLOG) < 0)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot listen on socket");
+	}
+
+	return fd;
+}
+
 void Server::_init_epoll()
 {
-	_epoll_fd = epoll_create(1024);
+	_epoll_fd = epoll_create(42);
 	if (_epoll_fd < 0)
 		throw std::runtime_error("epoll_create failed");
 
@@ -101,14 +116,16 @@ void Server::_init_epoll()
 	}
 }
 
-/* Server start and main loop */
+/*
+	Server start and main loop
+*/
 void Server::start()
 {
 	struct epoll_event events[MAX_EVENTS];
 
 	while (true)
 	{
-		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, -1);
+		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
 		if (nfds < 0)
 		{
 			if (errno == EINTR)
@@ -181,7 +198,7 @@ std::string Server::_process_request(int client_fd, const std::string& request_d
 	else
 	{
 		// Endpoint: / (or anything else), Returns index.html
-		std::ifstream index_file(ROOT_DIR);
+		std::ifstream index_file("./www/index.html");
 		std::ifstream error_file("./www/errors/error.html");
 		std::stringstream buffer_ss;
 		if (index_file)
@@ -225,7 +242,7 @@ void Server::_handle_new_connection(int listen_fd)
 
 void Server::_handle_client_data(int client_fd)
 {
-	char buffer[4096];
+	char buffer[READ_BUFFER_SIZE];
 	ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
 
 	if (bytes_read > 0)
@@ -243,7 +260,7 @@ void Server::_handle_client_data(int client_fd)
 			// 2. Save the response to Client's response_buffer
 			_clients[client_fd].response_buffer = response;
 			// 3. modify epoll to care about EPOLLOUT(write), [TODO]: short connection vs Keep-Alive
-			_modify_epoll(client_fd, static_cast<EPOLL_EVENTS>(EPOLLIN | EPOLLOUT));
+			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 
 			Logger::info("Request received, preparing to send response...");
 		}

@@ -10,7 +10,6 @@
 #include <signal.h>
 #include <netdb.h>
 
-#include <cstring>
 #include <string>
 #include <iostream>
 #include <stdexcept>
@@ -21,8 +20,20 @@
 #include "../config/ConfigParser.hpp"
 #include "../utils/StringUtils.hpp"
 
-#define MAX_EVENTS	1024
-#define	ROOT_DIR	"./www/index.html"
+// Epoll configuration
+#define MAX_EVENTS			1024
+
+// Socket configuration
+#define LISTEN_BACKLOG		128
+#define SOCKET_REUSE_OPT	1
+
+// Buffer sizes
+#define READ_BUFFER_SIZE	4096
+#define WRITE_BUFFER_SIZE	8192
+
+// Timeout values (milliseconds)
+#define EPOLL_TIMEOUT		-1  // -1 means infinite wait
+#define CLIENT_TIMEOUT		60000  // 60 seconds
 
 namespace wsv
 {
@@ -51,6 +62,7 @@ private:
 	// helper functions
 	void	_init_listening_sockets();
 	void	_init_epoll();
+	int		_create_listening_socket(const std::string& host, int port);
 	void	_add_to_epoll(int fd, uint32_t events);
 	void	_modify_epoll(int fd, uint32_t events);
 	void	_handle_new_connection(int listen_fd);
