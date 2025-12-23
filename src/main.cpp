@@ -1,13 +1,21 @@
 #include "server/Server.hpp"
+#include "config/ConfigParser.hpp"
 #include "utils/Logger.hpp"
 
 #include <iostream>
 
-int	main( void )
+int	main( int argc, char** argv )
 {
+	std::string config_path = "config/default.conf";
+	if (argc > 1)
+		config_path = argv[1];
+
 	try
 	{
-		wsv::Server my_server(8080);
+		wsv::ConfigParser config(config_path);
+		config.parse();
+
+		wsv::Server my_server(config);
 		my_server.start();
 	}
 	catch( const std::exception& e )

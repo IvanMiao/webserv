@@ -1,6 +1,7 @@
 #include "StringUtils.hpp"
 #include <cctype>
 #include <algorithm>
+#include <sstream>
 
 namespace StringUtils {
 
@@ -91,6 +92,13 @@ std::string removeSemicolon(const std::string& str)
 		result.erase(result.size() - 1);
 	
 	return trim(result);
+}
+
+std::string toString(int value)
+{
+	std::stringstream ss;
+	ss << value;
+	return ss.str();
 }
 
 } // namespace StringUtils

@@ -7,63 +7,98 @@
 namespace wsv
 {
 
-Server::Server(int port):
-_port(port), _server_fd(-1), _epoll_fd(-1)
+Server::Server(ConfigParser& config):
+_config(config), _epoll_fd(-1)
 {
 	signal(SIGPIPE, SIG_IGN);
 
-	_init_server_socket();
+	_init_listening_sockets();
 	_init_epoll();
 }
 
 Server::~Server()
 {
-	if (_server_fd >= 0)
-		close(_server_fd);
 	if (_epoll_fd >= 0)
 		close(_epoll_fd);
+	
+	for (std::map<int, std::vector<ServerConfig> >::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
+		close(it->first);
+
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
 		close(it->first);
 }
 
-void Server::_init_server_socket()
+void Server::_init_listening_sockets()
 {
-	_server_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (_server_fd < 0)
-		throw std::runtime_error("Cannot create socket");
-	
-	int opt = 1;
-	if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-		throw std::runtime_error("Cannot set socket options.");
+	const std::vector<ServerConfig>& configs = _config.getServers();
+	std::map<std::pair<std::string, int>, int> host_port_to_fd;
 
-	int flags = fcntl(_server_fd, F_GETFL, 0);
-	if (flags == -1)
-		throw std::runtime_error("Cannot get socket flags");
-	if (fcntl(_server_fd, F_SETFL, flags | O_NONBLOCK) == -1)
-		throw std::runtime_error("Cannot set socket to non-blocking");
+	for (size_t i = 0; i < configs.size(); ++i)
+	{
+		const ServerConfig& conf = configs[i];
+		std::pair<std::string, int> key(conf.host, conf.listen_port);
 
-	_address.sin_family = AF_INET;  // IPv4
-	_address.sin_addr.s_addr = INADDR_ANY;  // [TODO]: modify(?)
-	_address.sin_port = htons(_port);
+		if (host_port_to_fd.find(key) == host_port_to_fd.end())
+		{
+			int fd = socket(AF_INET, SOCK_STREAM, 0);
+			if (fd < 0)
+				throw std::runtime_error("Cannot create socket");
+			
+			int opt = 1;
+			if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+				throw std::runtime_error("Cannot set socket options.");
 
-	if (bind(_server_fd, (struct sockaddr *)&_address, sizeof(_address)) < 0)
-		throw std::runtime_error("Cannot bind to port");
-	
-	if (listen(_server_fd, 10) < 0)
-		throw std::runtime_error("Cannot listen to socket");
+			int flags = fcntl(fd, F_GETFL, 0);
+			if (flags == -1)
+				throw std::runtime_error("Cannot get socket flags");
+			if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+				throw std::runtime_error("Cannot set socket to non-blocking");
 
-	Logger::info("Server is listening on port {} ...", _port);
+			struct addrinfo hints = {};
+			struct addrinfo *res;
+			hints.ai_family = AF_INET;
+			hints.ai_socktype = SOCK_STREAM;
+
+			std::string port_str = StringUtils::toString(conf.listen_port);
+			int status = getaddrinfo(conf.host.c_str(), port_str.c_str(), &hints, &res);
+			if (status != 0)
+			{
+				close(fd);
+				throw std::runtime_error("getaddrinfo failed for " + conf.host + ": " + gai_strerror(status));
+			}
+
+			if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
+			{
+				freeaddrinfo(res);
+				close(fd);
+				throw std::runtime_error("Cannot bind to " + conf.host + ":" + StringUtils::toString(conf.listen_port));
+			}
+			freeaddrinfo(res);
+			
+			if (listen(fd, 10) < 0)
+			{
+				close(fd);
+				throw std::runtime_error("Cannot listen on socket");
+			}
+
+			host_port_to_fd[key] = fd;
+			_listen_fds[fd] = std::vector<ServerConfig>();
+			Logger::info("Server is listening on {}:{} ...", conf.host, conf.listen_port);
+		}
+		_listen_fds[host_port_to_fd[key]].push_back(conf);
+	}
 }
 
 void Server::_init_epoll()
 {
-	// 1. create epoll fd (epoll_create)
 	_epoll_fd = epoll_create(1024);
 	if (_epoll_fd < 0)
 		throw std::runtime_error("epoll_create failed");
 
-	// 2. listen readable event(epoll_ctl)
-	_add_to_epoll(_server_fd, EPOLLIN);
+	for (std::map<int, std::vector<ServerConfig> >::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
+	{
+		_add_to_epoll(it->first, EPOLLIN);
+	}
 }
 
 /* Server start and main loop */
@@ -87,8 +122,8 @@ void Server::start()
 			int current_fd = events[i].data.fd;
 			uint32_t events_flag = events[i].events;
 
-			if (current_fd == _server_fd)
-				_handle_new_connection();
+			if (_listen_fds.find(current_fd) != _listen_fds.end())
+				_handle_new_connection(current_fd);
 			else
 			{
 				// Read first, then handle Write
@@ -127,8 +162,9 @@ void Server::_modify_epoll(int fd, uint32_t events)
 TEMP: make response
 TODO: the first param -> class type HttpRequest
 */
-std::string Server::_process_request(const std::string& request_data)
+std::string Server::_process_request(int client_fd, const std::string& request_data)
 {
+	(void)client_fd;
 	// Simple Routing
 	if (request_data.find("GET /echo") != std::string::npos)
 	{
@@ -166,25 +202,25 @@ std::string Server::_process_request(const std::string& request_data)
 	}
 }
 
-void Server::_handle_new_connection()
+void Server::_handle_new_connection(int listen_fd)
 {
 	sockaddr_in client_addr;
-	socklen_t addrlen = sizeof(_address);
-	int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &addrlen);
+	socklen_t addrlen = sizeof(client_addr);
+	int client_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &addrlen);
 
 	if (client_fd < 0)
 	{
-		Logger::error("Faild to accept connection");
+		Logger::error("Failed to accept connection");
 		return;
 	}
 
 	int flags = fcntl(client_fd, F_GETFL, 0);
 	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
-	_clients.insert(std::make_pair(client_fd, Client(client_fd, client_addr)));
+	_clients.insert(std::make_pair(client_fd, Client(client_fd, client_addr, &_listen_fds[listen_fd])));
 
 	_add_to_epoll(client_fd, EPOLLIN);
-	Logger::info("New connection accepted. Client socket fd: {}", client_fd);
+	Logger::info("New connection accepted on fd {}. Client socket fd: {}", listen_fd, client_fd);
 }
 
 void Server::_handle_client_data(int client_fd)
@@ -203,7 +239,7 @@ void Server::_handle_client_data(int client_fd)
 						client_fd, _clients[client_fd].request_buffer);
 			
 			// 1. Handle request, generate response 
-			std::string response = _process_request(_clients[client_fd].request_buffer);
+			std::string response = _process_request(client_fd, _clients[client_fd].request_buffer);
 			// 2. Save the response to Client's response_buffer
 			_clients[client_fd].response_buffer = response;
 			// 3. modify epoll to care about EPOLLOUT(write), [TODO]: short connection vs Keep-Alive
