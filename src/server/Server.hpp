@@ -32,7 +32,17 @@ private:
 
 	std::map<int, Client> _clients;
 
+public:
+	Server( int port );
+	~Server();
+
+	void start();
+
 private:
+	// Forbidden copy constructor
+	Server(const Server&);
+	Server& operator=(const Server&);
+
 	// helper functions
 	void	_init_server_socket();
 	void	_init_epoll();
@@ -43,12 +53,6 @@ private:
 	void	_handle_client_write(int client_fd);
 
 	std::string	_process_request(const std::string& request_data);
-
-public:
-	Server( int port );
-	~Server();
-
-	void start();
 };
 
 

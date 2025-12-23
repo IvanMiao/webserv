@@ -199,7 +199,7 @@ void Server::_handle_client_data(int client_fd)
 		// HTTP end detection
 		if (_clients[client_fd].request_buffer.find("\r\n\r\n") != std::string::npos)
 		{
-            Logger::info("----- Full Request from client FD {} -----\n{}",
+			Logger::info("----- Full Request from client FD {} -----\n{}",
 						client_fd, _clients[client_fd].request_buffer);
 			
 			// 1. Handle request, generate response 
