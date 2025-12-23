@@ -42,19 +42,19 @@ const LocationConfig* ServerConfig::findLocation(const std::string& path) const
 	const LocationConfig* best_match = NULL;
 	size_t best_length = 0;
 	
-	// 找最长前缀匹配
+	// Find longest prefix match
 	for (size_t i = 0; i < locations.size(); i++)
 	{
 		const LocationConfig& loc = locations[i];
 		const std::string& loc_path = loc.path;
 		
-		// 检查是否是前缀匹配
+		// Check if it's a prefix match
 		if (path.size() >= loc_path.size() &&
 			path.substr(0, loc_path.size()) == loc_path)
 		{
-			// 确保是完整路径匹配
-			// 1. 如果 loc_path 以 '/' 结尾 (如 "/" 或 "/images/")，则前缀匹配就足够了
-			// 2. 否则，必须是完全匹配，或者 path 的下一个字符是 '/' (如 "/upload" 匹配 "/upload/file")
+			// Ensure it's a full path match
+			// 1. If loc_path ends with '/' (e.g., "/" or "/images/"), prefix match is enough
+			// 2. Otherwise, it must be an exact match, or the next character in path must be '/' (e.g., "/upload" matches "/upload/file")
 			if ((!loc_path.empty() && loc_path[loc_path.size() - 1] == '/') || 
 				path.size() == loc_path.size() || 
 				path[loc_path.size()] == '/')
@@ -91,11 +91,11 @@ void ConfigParser::parse()
 	{
 		line = StringUtils::trim(line);
 		
-		// 跳过空行和注释
+		// Skip empty lines and comments
 		if (line.empty() || line[0] == '#')
 			continue;
 		
-		// 找到 server 块
+		// Find server block
 		if (StringUtils::startsWith(line, "server"))
 			_parseServerBlock(file, line);
 	}
@@ -113,7 +113,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 	// find '{'
 	if (line.find('{') == std::string::npos)
 	{
-		// 读取下一行找 '{'
+		// Read next line to find '{'
 		std::getline(file, line);
 		line = StringUtils::trim(line);
 		if (line != "{")
@@ -122,7 +122,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 		}
 	}
 	
-	// 解析 server 块内容
+	// Parse server block content
 	while (std::getline(file, line))
 	{
 		line = StringUtils::trim(line);
@@ -130,7 +130,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 		if (line.empty() || line[0] == '#')
 			continue;
 		
-		// server 块结束
+		// End of server block
 		if (line == "}" || line == "};")
 		{
 			_servers.push_back(server);
@@ -202,7 +202,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 			_parseLocationBlock(file, line, server);
 	}
 	
-	// 如果到达文件末尾还没有找到 '}'
+	// If end of file is reached without finding '}'
 	_servers.push_back(server);
 }
 
@@ -211,11 +211,11 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 {
 	LocationConfig location;
 	
-	// 提取路径: location /uploads {
-	std::string value = line.substr(8);  // 跳过 "location"
+	// Extract path: location /uploads {
+	std::string value = line.substr(8);  // Skip "location"
 	value = StringUtils::trim(value);
 	
-	// 移除 '{'
+	// Remove '{'
 	size_t brace_pos = value.find('{');
 	if (brace_pos != std::string::npos)
 	{
@@ -224,11 +224,11 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 	else
 	{
 		location.path = value;
-		// 读取下一行找 '{'
+		// Read next line to find '{'
 		std::getline(file, line);
 	}
 	
-	// 解析 location 块内容
+	// Parse location block content
 	while (std::getline(file, line))
 	{
 		line = StringUtils::trim(line);
@@ -236,7 +236,7 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 		if (line.empty() || line[0] == '#')
 			continue;
 		
-		// location 块结束
+		// End of location block
 		if (line == "}" || line == "};")
 		{
 			server.locations.push_back(location);
@@ -274,7 +274,7 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 			value = StringUtils::trim(value);
 			value = StringUtils::removeSemicolon(value);
 			
-			// 取第一个 index 文件
+			// Take the first index file
 			std::vector<std::string> indexes = StringUtils::split(value, " \t");
 			if (!indexes.empty())
 				location.index = indexes[0];
