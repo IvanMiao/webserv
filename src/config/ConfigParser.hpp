@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 
+namespace wsv
+{
 
 class LocationConfig
 {
@@ -53,8 +55,6 @@ public:
 	std::map<int, std::string>	error_pages; // Error page mapping, key=HTTP status code
 	std::vector<LocationConfig>	locations; // All location configurations
 
-	// [TODO] ... more params?
-
 public:
 	ServerConfig();
 
@@ -81,5 +81,7 @@ public:
 	void parse();
 	const std::vector<ServerConfig>& getServers() const;
 };
+
+} // namespace wsv
 
 #endif

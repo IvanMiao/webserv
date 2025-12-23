@@ -1,12 +1,12 @@
 #include "ConfigParser.hpp"
 #include <iostream>
 
-static void printConfig(const std::vector<ServerConfig>& servers)
+static void printConfig(const std::vector<wsv::ServerConfig>& servers)
 {
     std::cout << "=== Configuration (" << servers.size() << " servers) ===" << std::endl;
     for (size_t i = 0; i < servers.size(); i++)
     {
-        const ServerConfig& s = servers[i];
+        const wsv::ServerConfig& s = servers[i];
         std::cout << "Server #" << i + 1 << " [" << s.host << ":" << s.listen_port
                   << "] root: " << s.root << " max_body: " << s.client_max_body_size << std::endl;
         
@@ -26,7 +26,7 @@ static void printConfig(const std::vector<ServerConfig>& servers)
 
         for (size_t j = 0; j < s.locations.size(); j++)
         {
-            const LocationConfig& l = s.locations[j];
+            const wsv::LocationConfig& l = s.locations[j];
             std::cout << "  - Loc [" << l.path << "] root: " << l.root << ", index: " << l.index;
             
             if (!l.allow_methods.empty()) {
@@ -56,7 +56,7 @@ int main(int argc, char** argv)
     
     try
     {
-        ConfigParser parser(argv[1]);
+        wsv::ConfigParser parser(argv[1]);
         parser.parse();
         
         // Print configuration
@@ -65,10 +65,10 @@ int main(int argc, char** argv)
         // Test location matching
         std::cout << "\n=== Testing Location Matching ===" << std::endl;
         
-        const std::vector<ServerConfig>& servers = parser.getServers();
+        const std::vector<wsv::ServerConfig>& servers = parser.getServers();
         if (!servers.empty())
         {
-            const ServerConfig& server = servers[0];
+            const wsv::ServerConfig& server = servers[0];
             
             std::string test_paths[] = {
                 "/",
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
             for (size_t i = 0; i < 7; i++)
             {
                 const std::string& path = test_paths[i];
-                const LocationConfig* loc = server.findLocation(path);
+                const wsv::LocationConfig* loc = server.findLocation(path);
                 
                 std::cout << "Path: " << path << " -> ";
                 if (loc)

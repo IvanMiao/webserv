@@ -4,6 +4,9 @@
 #include <cstdlib> 
 #include <algorithm>
 
+namespace wsv
+{
+
 // ==================== LocationConfig ====================
 LocationConfig::LocationConfig() 
 	: path("/") 
@@ -18,10 +21,10 @@ LocationConfig::LocationConfig()
 
 bool LocationConfig::isMethodAllowed(const std::string& method) const
 { 
-	for (size_t i = 0; i < allow_methods.size(); i++) 
+	for (size_t i = 0; i < allow_methods.size(); i++)
 	{ 
 		if (allow_methods[i] == method) 
-		return true; 
+			return true;
 	} 
 	return false; 
 }
@@ -137,7 +140,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 		// listen 127.0.0.1:8080;
 		if (StringUtils::startsWith(line, "listen"))
 		{
-			std::string value = line.substr(6);  // 跳过 "listen"
+			std::string value = line.substr(6);  // Jump "listen"
 			value = StringUtils::trim(value);
 			value = StringUtils::removeSemicolon(value);
 			
@@ -337,3 +340,5 @@ const std::vector<ServerConfig>& ConfigParser::getServers() const
 {
 	return _servers;
 }
+
+} // namespace wsv
