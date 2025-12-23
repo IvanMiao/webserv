@@ -1,5 +1,6 @@
 #include "ConfigParser.hpp"
 #include <iostream>
+#include <cassert>
 
 static void printConfig(const std::vector<wsv::ServerConfig>& servers)
 {
@@ -70,26 +71,24 @@ int main(int argc, char** argv)
 		{
 			const wsv::ServerConfig& server = servers[0];
 			
-			std::string test_paths[] = {
-				"/",
-				"/index.html",
-				"/uploads",
-				"/uploads/file.txt",
-				"/old-page",
-				"/cgi-bin/script.py",
-				"/nonexistent"
+			struct {
+				std::string path;
+				std::string expected;
+			} test_cases[] = {
+				{"/", "/"},
+				{"/index.html", "/"},
+				{"/uploads", "/uploads"},
+				{"/uploads/file.txt", "/uploads"},
+				{"/old-page", "/old-page"},
+				{"/cgi-bin/script.py", "/cgi-bin"},
+				{"/nonexistent", "/"}
 			};
 			
-			for (size_t i = 0; i < 7; i++)
+			for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++)
 			{
-				const std::string& path = test_paths[i];
-				const wsv::LocationConfig* loc = server.findLocation(path);
-				
-				std::cout << "Path: " << path << " -> ";
-				if (loc)
-					std::cout << "Location: " << loc->path << std::endl;
-				else
-					std::cout << "No matching location" << std::endl;
+				const wsv::LocationConfig* loc = server.findLocation(test_cases[i].path);
+				assert(loc != NULL && loc->path == test_cases[i].expected);
+				std::cout << "Path: " << test_cases[i].path << " -> Location: " << loc->path << std::endl;
 			}
 		}
 		
