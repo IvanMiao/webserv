@@ -259,7 +259,8 @@ void Server::_handle_client_data(int client_fd)
 			std::string response = _process_request(client_fd, _clients[client_fd].request_buffer);
 			// 2. Save the response to Client's response_buffer
 			_clients[client_fd].response_buffer = response;
-			// 3. modify epoll to care about EPOLLOUT(write), [TODO]: short connection vs Keep-Alive
+			// 3. modify epoll to care about EPOLLOUT(write)
+			// [TODO]: short connection vs Keep-Alive
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 
 			Logger::info("Request received, preparing to send response...");
