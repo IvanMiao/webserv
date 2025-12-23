@@ -47,18 +47,18 @@ public:
 	std::string	host;  // 127.0.0.1
 	int			listen_port;
 	std::string	root;
-	size_t		client_max_body_size; // 最大请求体大小，默认 1MB
+	size_t		client_max_body_size; // Max request body size, default 1MB
 
-	std::vector<std::string>	server_names; // 服务器名称，可多个
-	std::map<int, std::string>	error_pages; // 错误页映射，key=HTTP状态码
-	std::vector<LocationConfig>	locations; // 所有 location 配置
+	std::vector<std::string>	server_names; // Server names, can be multiple
+	std::map<int, std::string>	error_pages; // Error page mapping, key=HTTP status code
+	std::vector<LocationConfig>	locations; // All location configurations
 
 	// [TODO] ... more params?
 
 public:
 	ServerConfig();
 
-	// 查找最佳匹配的 location
+	// Find the best matching location
 	const LocationConfig* findLocation(const std::string& path) const;
 };
 
@@ -69,7 +69,7 @@ private:
 	std::string					_filepath;
 	std::vector<ServerConfig>	_servers;
 
-	// 解析辅助方法
+	// Parsing helper methods
 	void _parseServerBlock(std::ifstream& file, std::string& line);
 	void _parseLocationBlock(std::ifstream& file, std::string& line, 
 						   ServerConfig& server);
@@ -80,9 +80,6 @@ public:
 
 	void parse();
 	const std::vector<ServerConfig>& getServers() const;
-
-	 // 配置打印, 调试输出
-	void printConfig() const;
 };
 
 #endif

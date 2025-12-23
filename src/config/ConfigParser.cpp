@@ -94,9 +94,7 @@ void ConfigParser::parse()
 		
 		// 找到 server 块
 		if (StringUtils::startsWith(line, "server"))
-		{
 			_parseServerBlock(file, line);
-		}
 	}
 	
 	file.close();
@@ -109,7 +107,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 {
 	ServerConfig server;
 	
-	// 检查是否有 '{'
+	// find '{'
 	if (line.find('{') == std::string::npos)
 	{
 		// 读取下一行找 '{'
@@ -144,18 +142,14 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 			value = StringUtils::removeSemicolon(value);
 			
 			size_t colon_pos = value.find(':');
-			if (colon_pos != std::string::npos)
+			if (colon_pos != std::string::npos)  // host:port
 			{
-				// host:port 格式
 				server.host = value.substr(0, colon_pos);
 				std::string port_str = value.substr(colon_pos + 1);
 				server.listen_port = std::atoi(port_str.c_str());
 			}
-			else
-			{
-				// 只有端口
+			else  // just port
 				server.listen_port = std::atoi(value.c_str());
-			}
 		}
 		// server_name localhost example.com;
 		else if (StringUtils::startsWith(line, "server_name"))
@@ -342,82 +336,4 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 const std::vector<ServerConfig>& ConfigParser::getServers() const
 {
 	return _servers;
-}
-
-/*
-FOR TESTING
-*/
-void ConfigParser::printConfig() const
-{
-	std::cout << "=== Configuration ===" << std::endl;
-	std::cout << "Total servers: " << _servers.size() << std::endl << std::endl;
-	
-	for (size_t i = 0; i < _servers.size(); i++)
-	{
-		const ServerConfig& server = _servers[i];
-		std::cout << "Server #" << (i + 1) << ":" << std::endl;
-		std::cout << "  Host: " << server.host << std::endl;
-		std::cout << "  Port: " << server.listen_port << std::endl;
-		std::cout << "  Root: " << server.root << std::endl;
-		std::cout << "  Max body size: " << server.client_max_body_size 
-				  << " bytes" << std::endl;
-		
-		if (!server.server_names.empty())
-		{
-			std::cout << "  Server names: ";
-			for (size_t j = 0; j < server.server_names.size(); j++)
-			{
-				std::cout << server.server_names[j];
-				if (j < server.server_names.size() - 1)
-					std::cout << ", ";
-			}
-			std::cout << std::endl;
-		}
-		
-		if (!server.error_pages.empty())
-		{
-			std::cout << "  Error pages:" << std::endl;
-			for (std::map<int, std::string>::const_iterator it = server.error_pages.begin();
-				 it != server.error_pages.end(); ++it)
-			{
-				std::cout << "    " << it->first << " -> " << it->second << std::endl;
-			}
-		}
-		
-		std::cout << "  Locations: " << server.locations.size() << std::endl;
-		for (size_t j = 0; j < server.locations.size(); j++)
-		{
-			const LocationConfig& loc = server.locations[j];
-			std::cout << "    [" << loc.path << "]" << std::endl;
-			std::cout << "      Root: " << loc.root << std::endl;
-			std::cout << "      Index: " << loc.index << std::endl;
-			std::cout << "      Autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
-			
-			if (!loc.allow_methods.empty())
-			{
-				std::cout << "      Methods: ";
-				for (size_t k = 0; k < loc.allow_methods.size(); k++)
-				{
-					std::cout << loc.allow_methods[k];
-					if (k < loc.allow_methods.size() - 1)
-						std::cout << ", ";
-				}
-				std::cout << std::endl;
-			}
-			
-			if (loc.hasRedirect())
-			{
-				std::cout << "      Redirect: " << loc.redirect_code 
-						 << " -> " << loc.redirect_url << std::endl;
-			}
-			
-			if (loc.upload_enable)
-			{
-				std::cout << "      Upload: enabled" << std::endl;
-				std::cout << "      Upload path: " << loc.upload_path << std::endl;
-			}
-		}
-		
-		std::cout << std::endl;
-	}
 }
