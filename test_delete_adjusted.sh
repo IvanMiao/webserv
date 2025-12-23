@@ -93,6 +93,7 @@ rm -f www/test_delete_root.txt
 # Test 5: 路径遍历攻击测试
 echo -e "\n${YELLOW}Test 5: Path traversal attack in DELETE${NC}"
 HTTP_CODE=$(curl -X DELETE \
+     --path-as-is \
      -s -o /dev/null -w "%{http_code}" \
      "$SERVER/upload/../../../etc/hosts")
 

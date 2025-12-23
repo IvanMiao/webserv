@@ -36,6 +36,15 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     std::cerr << "[UNIQUE_MARKER_12345] START handleRequest" << std::endl;
     std::string method = request.getMethod();
     std::cerr << "[DEBUG HANDLER] URI = " << request.getPath() << ", Method = " << method << std::endl;
+    
+    // Check for path traversal attacks BEFORE other validations
+    // This ensures 403 is returned for traversal attempts, not 405
+    if (_hasPathTraversal(request.getPath()))
+    {
+        std::cerr << "[DEBUG HANDLER] Path traversal detected, returning 403" << std::endl;
+        return ErrorHandler::get_error_page(403, _config);
+    }
+    
     const LocationConfig* location_config = _config.findLocation(request.getPath());
 
     if (!location_config)
@@ -72,6 +81,19 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 }
 
 // ============================================================================
+// Private Methods: Utility Functions
+// ============================================================================
+
+/**
+ * Check for path traversal attacks
+ * Path traversal occurs when the URI contains ".." which attempts to go up directories
+ */
+bool RequestHandler::_hasPathTraversal(const std::string& uri_path) const
+{
+    return uri_path.find("..") != std::string::npos;
+}
+
+// ============================================================================
 // Private Methods: HTTP Method Handlers
 // ============================================================================
 
@@ -82,10 +104,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
                                         const LocationConfig& location_config)
 {
-    // Check for path traversal (only ".." is a real threat, not "/" itself)
-    if (request.getPath().find("..") != std::string::npos)
-        return ErrorHandler::get_error_page(403, _config);
-    
+
     std::string file_path = _buildFilePath(request.getPath(), location_config);
 
     if (!FileHandler::file_exists(file_path))
@@ -114,6 +133,12 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
  * Supports file upload or CGI execution
  */
 
+ // ============================================================================
+// _handlePost - Handles POST requests
+// ============================================================================
+// Process: Check for upload -> check file exists -> handle CGI scripts -> or return 405
+// ============================================================================
+
 HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
                                          const LocationConfig& location_config)
 {
@@ -131,7 +156,14 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
 
     // CGI POST 请求
     if (_isCgiRequest(file_path, location_config))
+    {
+        // Check if CGI script file exists before attempting execution
+        if (!FileHandler::file_exists(file_path))
+        {
+            return ErrorHandler::get_error_page(404, _config);  // Not Found
+        }
         return _execute_cgi(request, file_path, location_config);
+    }
 
     // 其他情况 POST 不允许
     return ErrorHandler::get_error_page(405, _config);
@@ -162,12 +194,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
 HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
                                            const LocationConfig& location_config)
 {
-    // Check for path traversal in the URI path (only ".." is a real threat)
-    if (request.getPath().find("..") != std::string::npos) {
-        std::cerr << "[DEBUG DELETE] Path traversal detected in URI, returning 403" << std::endl;
-        return ErrorHandler::get_error_page(403, _config);
-    }
-    
+    // Path traversal check is now done in handleRequest() before method validation
     std::string file_path = _buildFilePath(request.getPath(), location_config);
 
     std::cerr << "[DEBUG DELETE] Full file path: " << file_path << std::endl;
