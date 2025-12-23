@@ -52,9 +52,9 @@ Epoll 的真正的魔法在于其基于回调（Callback）的事件通知机制
 
 - `int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)`
 	- 将server_fd 加入 epoll 监控
-	- 参数`op`： EPOLL_CTL_ADD (添加), EPOLL_CTL_MOD (修改), EPOLL_CTL_DEL (删除)
+	- 参数 `op`： `EPOLL_CTL_ADD` (添加), `EPOLL_CTL_MOD` (修改), `EPOLL_CTL_DEL` (删除)
 	- 参数 `event`: 一个结构体，包含关心的事件（EPOLLIN | EPOLLOUT）和 用户数据（通常存 fd）
-	- 内核动作： ADD：在红黑树插入节点，并注册回调函数 ep_poll_callback。MOD：修改红黑树节点中的关注事件（如从“只读”改为“读写”）。
+	- 内核动作： ADD：在红黑树插入节点，并注册回调函数 ep_poll_callback; MOD：修改红黑树节点中的关注事件（如从“只读”改为“读写”）。
 
 - `int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)`
 	- 内核动作： 检查 eventpoll 对象的就绪链表。如果链表为空：挂起当前线程（阻塞），直到超时或有事件触发回调。如果链表不空：将链表中的事件数据拷贝到用户态的 events 数组中。

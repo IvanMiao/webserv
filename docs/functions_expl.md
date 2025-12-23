@@ -6,15 +6,15 @@
 
 - `socket`: `int socket(int domain, int type, int protocol)`
 	- 向操作系统申请创建一个通信端点（Endpoint）。它不包含地址或端口，仅仅是分配了资源。
-	- domain: AF_INET (IPv4)
-	- type: SOCK_STREAM (TCP)
-	- protocol: 0 (默认协议，即 TCP)
+	- param `domain`: `AF_INET` (IPv4)
+	- param `type`: `SOCK_STREAM` (TCP)
+	- param `protocol`: 0 (默认协议，即 TCP)
 	- 返回： 成功时返回一个 fd(server socket)，失败返回 -1
 
 - `bind`： `int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)`
 	- 将具体的 IP 地址和端口号（Port）“绑定”到刚才创建的 socket 上。
-	- sockfd: socket() 返回的fd
-	- addr: 一个结构体，包含 IP（通常是 INADDR_ANY，表示接受本机所有网卡的连接）和端口（经过 htons 处理的）。
+	- param `sockfd`: `socket()` 返回的fd
+	- param `addr`: 一个结构体，包含 IP（通常是 `INADDR_ANY`，表示接受本机所有网卡的连接）和端口（经过 htons 处理的）。
 
 - `listen`: `int listen(int sockfd, int backlog)`
 	- 将 socket 标记为“被动”状态，准备接受传入的连接请求。它还会设置一个“排队队列”(backlog)，`backlog`指定连接队列的最大长度。
@@ -23,9 +23,9 @@
 - `accept`: `int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)`
 	- 从 listen 的队列中取出第一个等待的连接请求，并创建一个**全新的 socket** 来专门服务这个客户端。返回一个 fd(client socket)。
 	- 这里涉及两个socket： 
-		- Listening Socket/Server Socket: 即 socket() 创建的那个。一直处于监听状态。
-		- Connected Socket/Client Socket: accept() 返回的新fd。负责和某个具体的客户端进行沟通。
-	- 在 Webserv 中，不能直接阻塞在 accept 上。根据规则，需要先用 (e)poll() 监控监听 socket 。
+		- Listening Socket/Server Socket: 即 `socket()` 创建的那个。一直处于监听状态。
+		- Connected Socket/Client Socket: `accept()` 返回的新fd。负责和某个具体的客户端进行沟通。
+	- 在 Webserv 中，不能直接阻塞在 accept 上。根据规则，需要先用 `(e)poll()` 监控监听 socket 。
 
 - `send`: `ssize_t send(int sockfd, const void *buf, size_t len, int flags)`
 	- 向 Client Socket 发送数据
