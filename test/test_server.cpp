@@ -1,6 +1,6 @@
-#include "../src/server/Server.hpp"
-#include "../src/server/Client.hpp"
-#include "../src/config/ConfigParser.hpp"
+#include "server/Server.hpp"
+#include "server/Client.hpp"
+#include "config/ConfigParser.hpp"
 #include <iostream>
 #include <cassert>
 #include <vector>
@@ -170,17 +170,12 @@ void test_server_static_file_response(TestRunner& runner)
 		parser.parse();
 		TestServer server(parser);
 		
-		// Ensure index.html exists for test
-		std::ofstream outfile("./www/index.html");
-		outfile << "<html><body>Test Index</body></html>";
-		outfile.close();
-		
 		std::string request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
 		std::string response = server.process_request(0, request);
 		
 		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");
 		if (response.find("Content-Type: text/html") == std::string::npos) throw std::runtime_error("Response missing Content-Type");
-		if (response.find("Test Index") == std::string::npos) throw std::runtime_error("Response missing file content");
+		if (response.find("Hello, Browser.") == std::string::npos) throw std::runtime_error("Response missing file content");
 		
 		runner.pass();
 	} catch (const std::exception& e) {

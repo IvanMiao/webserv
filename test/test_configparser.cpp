@@ -1,4 +1,4 @@
-#include "../src/config/ConfigParser.hpp"
+#include "ConfigParser.hpp"
 #include <iostream>
 #include <cassert>
 #include <vector>
@@ -121,12 +121,10 @@ void test_location_matching(TestRunner& runner, const wsv::ServerConfig& server)
 		for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++)
 		{
 			const wsv::LocationConfig* loc = server.findLocation(test_cases[i].path);
-			if (loc == NULL) {
+			if (loc == NULL)
 				throw std::runtime_error("Location not found for path: " + test_cases[i].path);
-			}
-			if (loc->path != test_cases[i].expected) {
+			if (loc->path != test_cases[i].expected)
 				throw std::runtime_error("Expected location " + test_cases[i].expected + " for path " + test_cases[i].path + ", but got " + loc->path);
-			}
 			// std::cout << "Path: " << test_cases[i].path << " -> Location: " << loc->path << std::endl;
 		}
 		runner.pass();
