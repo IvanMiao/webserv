@@ -94,11 +94,21 @@ std::string removeSemicolon(const std::string& str)
 	return trim(result);
 }
 
-std::string toString(int value)
+std::string	toString(int value)
 {
 	std::stringstream ss;
 	ss << value;
 	return ss.str();
+}
+
+std::string	toLower(const std::string& str)
+{
+	std::string result = str;
+
+	for (size_t i = 0; i < result.size(); ++i)
+		result[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
+	
+	return result;
 }
 
 } // namespace StringUtils
