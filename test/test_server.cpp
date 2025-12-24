@@ -1,0 +1,211 @@
+#include "server/Server.hpp"
+#include "server/Client.hpp"
+#include "config/ConfigParser.hpp"
+#include <iostream>
+#include <cassert>
+#include <vector>
+#include <string>
+#include <fstream>
+
+// ANSI color codes for test output
+#define GREEN "\033[32m"
+#define RED "\033[31m"
+#define YELLOW "\033[33m"
+#define RESET "\033[0m"
+#define BOLD "\033[1m"
+
+class TestRunner
+{
+private:
+	int _passed;
+	int _failed;
+	std::string _current_test;
+
+public:
+	TestRunner() : _passed(0), _failed(0) {}
+
+	void startTest(const std::string& name)
+	{
+		_current_test = name;
+		std::cout << YELLOW << "[TEST] " << RESET << name << " ... ";
+		std::cout.flush();
+	}
+
+	void pass()
+	{
+		std::cout << GREEN << "PASS" << RESET << std::endl;
+		_passed++;
+	}
+
+	void fail(const std::string& msg)
+	{
+		std::cout << RED << "FAIL" << RESET << std::endl;
+		std::cout << "  Error: " << msg << std::endl;
+		_failed++;
+	}
+
+	void summary()
+	{
+		std::cout << std::endl << BOLD << "=== Test Summary ===" << RESET << std::endl;
+		std::cout << "Total: " << (_passed + _failed) << " tests" << std::endl;
+		std::cout << GREEN << "Passed: " << _passed << RESET << std::endl;
+		if (_failed > 0)
+			std::cout << RED << "Failed: " << _failed << RESET << std::endl;
+		else
+			std::cout << "Failed: " << _failed << std::endl;
+	}
+
+	bool allPassed() const { return _failed == 0; }
+};
+
+// Helper class to access protected members of Server
+class TestServer : public wsv::Server {
+public:
+	TestServer(wsv::ConfigParser& config) : wsv::Server(config) {}
+	
+	// Expose protected methods for testing
+	std::string process_request(int client_fd, const std::string& request_data)
+	{
+		return _process_request(client_fd, request_data);
+	}
+};
+
+// ==================== Configuration Logic Tests ====================
+
+void test_config_parser_values(TestRunner& runner)
+{
+	runner.startTest("ConfigParser parses correct values");
+	try {
+		wsv::ConfigParser parser("test/test.conf");
+		parser.parse();
+		
+		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
+		if (servers.size() != 3) {
+			throw std::runtime_error("Expected 3 servers, got " + StringUtils::toString(servers.size()));
+		}
+		
+		// Check first server
+		const wsv::ServerConfig& s1 = servers[0];
+		if (s1.listen_port != 8080) throw std::runtime_error("Server 1 port mismatch");
+		if (s1.host != "127.0.0.1") throw std::runtime_error("Server 1 host mismatch");
+		if (s1.root != "./www") throw std::runtime_error("Server 1 root mismatch");
+		
+		// Check locations
+		const wsv::LocationConfig* loc_upload = s1.findLocation("/uploads");
+		if (!loc_upload) throw std::runtime_error("Location /uploads not found");
+		if (!loc_upload->upload_enable) throw std::runtime_error("Upload not enabled for /uploads");
+		if (loc_upload->autoindex) throw std::runtime_error("Autoindex should be off for /uploads");
+		
+		const wsv::LocationConfig* loc_cgi = s1.findLocation("/cgi-bin");
+		if (!loc_cgi) throw std::runtime_error("Location /cgi-bin not found");
+		if (loc_cgi->cgi_extension != ".py") throw std::runtime_error("CGI extension mismatch");
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
+void test_location_matching_logic(TestRunner& runner)
+{
+	runner.startTest("Location matching logic (longest prefix)");
+	try {
+		wsv::ServerConfig server;
+		
+		wsv::LocationConfig loc_root;
+		loc_root.path = "/";
+		server.locations.push_back(loc_root);
+		
+		wsv::LocationConfig loc_api;
+		loc_api.path = "/api";
+		server.locations.push_back(loc_api);
+		
+		wsv::LocationConfig loc_api_v1;
+		loc_api_v1.path = "/api/v1";
+		server.locations.push_back(loc_api_v1);
+		
+		// Test cases
+		if (server.findLocation("/")->path != "/") throw std::runtime_error("Failed match /");
+		if (server.findLocation("/index.html")->path != "/") throw std::runtime_error("Failed match /index.html");
+		if (server.findLocation("/api")->path != "/api") throw std::runtime_error("Failed match /api");
+		if (server.findLocation("/api/users")->path != "/api") throw std::runtime_error("Failed match /api/users");
+		if (server.findLocation("/api/v1")->path != "/api/v1") throw std::runtime_error("Failed match /api/v1");
+		if (server.findLocation("/api/v1/users")->path != "/api/v1") throw std::runtime_error("Failed match /api/v1/users");
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
+// ==================== Server Request Processing Tests ====================
+
+void test_server_echo_response(TestRunner& runner)
+{
+	runner.startTest("Server handles /echo request");
+	try {
+		wsv::ConfigParser parser("test/test.conf");
+		parser.parse();
+		TestServer server(parser);
+		
+		std::string request = "GET /echo HTTP/1.1\r\nHost: localhost\r\n\r\nHello World";
+		std::string response = server.process_request(0, request);
+		
+		// Verify response structure
+		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");
+		if (response.find("Content-Type: text/plain") == std::string::npos) throw std::runtime_error("Response missing Content-Type");
+		if (response.find("Hello World") == std::string::npos) throw std::runtime_error("Response missing body");
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
+void test_server_static_file_response(TestRunner& runner)
+{
+	runner.startTest("Server handles static file request (index.html)");
+	try {
+		wsv::ConfigParser parser("test/test.conf");
+		parser.parse();
+		TestServer server(parser);
+		
+		std::string request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+		std::string response = server.process_request(0, request);
+		
+		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");
+		if (response.find("Content-Type: text/html") == std::string::npos) throw std::runtime_error("Response missing Content-Type");
+		if (response.find("Hello, Browser.") == std::string::npos) throw std::runtime_error("Response missing file content");
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
+// ==================== Main Test Runner ====================
+
+int main()
+{
+	std::cout << BOLD << "========================================" << RESET << std::endl;
+	std::cout << BOLD << "  Webserv Practical Test Suite" << RESET << std::endl;
+	std::cout << BOLD << "========================================" << RESET << std::endl << std::endl;
+
+	TestRunner runner;
+
+	// Configuration Tests
+	std::cout << BOLD << "--- Configuration Logic ---" << RESET << std::endl;
+	test_config_parser_values(runner);
+	test_location_matching_logic(runner);
+	std::cout << std::endl;
+
+	// Server Logic Tests
+	std::cout << BOLD << "--- Server Request Processing ---" << RESET << std::endl;
+	test_server_echo_response(runner);
+	test_server_static_file_response(runner);
+	std::cout << std::endl;
+
+	runner.summary();
+
+	return runner.allPassed() ? 0 : 1;
+}
