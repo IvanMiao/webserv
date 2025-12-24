@@ -34,9 +34,11 @@ Epoll 的真正的魔法在于其基于回调（Callback）的事件通知机制
 
 ## 3. Epoll 在本项目中的架构设计与应用
 
-在我们的 WebServer 项目中，`src/server/Server.cpp` 围绕 `epoll` 构建了一个经典的 Reactor 模式（事件驱动架构）。`Server` 类在初始化阶段通过 `_init_epoll` 函数调用 `epoll_create` 获取一个 epoll 实例句柄 `_epoll_fd`，并将服务器的监听 Socket（`_server_fd`）作为第一个监控对象加入 epoll 实例中，关注其 `EPOLLIN`（可读）事件。这标志着事件循环的起点。
+在我们的 WebServer 项目中，`src/server/Server.cpp` 围绕 `epoll` 构建了一个经典的 Reactor 模式（事件驱动架构）。
 
-项目的主循环位于 `Server::start()` 函数中，它不断调用 `epoll_wait` 阻塞等待事件发生。当 `epoll_wait` 返回时，我们会遍历返回的 `epoll_event` 数组。如果就绪的 FD 是 `_server_fd`，说明有新的客户端连接请求，此时服务器调用 `accept` 建立连接，并将新生成的客户端 FD 设置为非阻塞模式（Non-blocking），随后通过 `_add_to_epoll` 将其加入监控，初始关注 `EPOLLIN` 事件，准备接收客户端请求。
+项目的主循环位于 `Server::start()` 函数中。首先，该函数会调用 `_init_listening_sockets` 创建并绑定所有服务器配置的监听端口，并将它们存储在 `_listen_fds` 映射中。接着调用 `_init_epoll` 创建 epoll 实例（`_epoll_fd`），并将所有监听 Socket 加入 epoll 监控，关注其 `EPOLLIN`（可读）事件。
+
+随后进入无限循环，不断调用 `epoll_wait` 阻塞等待事件发生。当 `epoll_wait` 返回时，我们会遍历返回的 `epoll_event` 数组。如果就绪的 FD 属于 `_listen_fds`（即监听 Socket），说明有新的客户端连接请求，此时服务器调用 `accept` 建立连接，并将新生成的客户端 FD 设置为非阻塞模式（Non-blocking），随后通过 `_add_to_epoll` 将其加入监控，初始关注 `EPOLLIN` 事件，准备接收客户端请求。
 
 对于已建立的客户端连接，服务器根据事件类型进行状态流转。当 `EPOLLIN` 事件触发时，`_handle_client_data` 函数读取客户端发送的 HTTP 请求报文。值得注意的是，本项目采用了 epoll 的默认模式——水平触发（Level Triggered, LT）。这意味着只要接收缓冲区中还有数据未读完，epoll 就会不断通知我们。当请求读取完毕并生成响应后，服务器并不立即发送，而是通过 `_modify_epoll` 函数修改该 FD 的监听事件，将关注点从纯粹的读取（`EPOLLIN`）变为读取与写入（`EPOLLIN | EPOLLOUT`）。
 
