@@ -1,5 +1,6 @@
 #include "server/Server.hpp"
 #include "server/Client.hpp"
+#include "http/HttpRequest.hpp"
 #include "config/ConfigParser.hpp"
 #include <iostream>
 #include <cassert>
@@ -15,9 +16,9 @@ public:
 	TestServer(wsv::ConfigParser& config) : wsv::Server(config) {}
 	
 	// Expose protected methods for testing
-	std::string process_request(int client_fd, const std::string& request_data)
+	std::string process_request(int client_fd, const wsv::HttpRequest& request)
 	{
-		return _process_request(client_fd, request_data);
+		return _process_request(client_fd, request);
 	}
 };
 
@@ -99,7 +100,8 @@ void test_server_echo_response(TestRunner& runner)
 		parser.parse();
 		TestServer server(parser);
 		
-		std::string request = "GET /echo HTTP/1.1\r\nHost: localhost\r\n\r\nHello World";
+		std::string request_raw = "GET /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: 11\r\n\r\nHello World";
+		wsv::HttpRequest request(request_raw);
 		std::string response = server.process_request(0, request);
 		
 		// Verify response structure
@@ -121,7 +123,8 @@ void test_server_static_file_response(TestRunner& runner)
 		parser.parse();
 		TestServer server(parser);
 		
-		std::string request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+		std::string request_raw = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+		wsv::HttpRequest request(request_raw);
 		std::string response = server.process_request(0, request);
 		
 		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");

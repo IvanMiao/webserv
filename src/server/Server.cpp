@@ -209,7 +209,7 @@ void Server::_handle_client_data(int client_fd)
 		if (client.request.hasError())
 		{
 			Logger::error("Bad Request from client FD {}", client_fd);
-			std::string response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+			std::string response = HttpResponse::createErrorResponse(400).serialize();
 			client.response_buffer = response;
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 			return;
@@ -284,22 +284,15 @@ TEMP: make response
 */
 std::string Server::_process_request(int client_fd, const HttpRequest& request)
 {
+	(void)client_fd;
 	// Simple Routing
 	if (request.getMethod() == "GET" && request.getPath() == "/echo")
 	{
 		// Endpoint: /echo
-		// For echo, we return the raw request body (or the whole request if we used the buffer)
-		// Here we just echo the body for simplicity, or we can use _clients[client_fd].request_buffer if we want to echo everything
-		std::string body = _clients[client_fd].request_buffer; // Echoing the full raw request as before
+		// For echo, we return the request body
+		std::string body = request.getBody();
 
-		std::stringstream response_ss;
-		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/plain\r\n"
-					<< "Content-Length: " << body.length() << "\r\n"
-					<< "Server: Webserv/1.0\r\n" << "\r\n"
-					<< body;
-
-		std::string response = response_ss.str();
-		return response;
+		return HttpResponse::createOkResponse(body, "text/plain").serialize();
 	}
 	else
 	{
@@ -314,14 +307,7 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 		
 		std::string html_content = buffer_ss.str();
 		
-		std::stringstream response_ss;
-		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/html\r\n"
-					<< "Content-Length: " << html_content.length() << "\r\n"
-					<< "Server: Webserv/1.0\r\n" << "\r\n"
-					<< html_content;
-
-		std::string response = response_ss.str();
-		return response;
+		return HttpResponse::createOkResponse(html_content, "text/html").serialize();
 	}
 }
 
