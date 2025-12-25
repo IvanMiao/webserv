@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <netinet/in.h>
-#include "../config/ConfigParser.hpp"
+#include "ConfigParser.hpp"
 
 namespace wsv {
 

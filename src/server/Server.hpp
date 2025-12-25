@@ -17,8 +17,9 @@
 #include <vector>
 
 #include "Client.hpp"
-#include "../config/ConfigParser.hpp"
-#include "../utils/StringUtils.hpp"
+#include "config/ConfigParser.hpp"
+#include "utils/StringUtils.hpp"
+#include "utils/Logger.hpp"
 
 // Epoll configuration
 #define MAX_EVENTS			1024

@@ -1,5 +1,4 @@
 #include "Server.hpp"
-#include "../utils/Logger.hpp"
 
 #include <fstream>
 #include <sstream>

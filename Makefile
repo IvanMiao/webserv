@@ -1,6 +1,7 @@
 NAME	:= webserv
 CC		:= c++
 FLAG	:= -Wall -Wextra -Werror -std=c++98
+INCLUDE	:= -I src -I src/server -I src/config -I src/utils -I src/router -I src/http -I src/cgi
 
 SRC_FILES	:= main.cpp \
 				config/ConfigParser.cpp \
@@ -29,7 +30,7 @@ TEST_SERVER_SRC	:= test/test_server.cpp \
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	$(CC) $(FLAG) $(OBJ) -o $(NAME)
+	$(CC) $(FLAG) $(INCLUDE) $(OBJ) -o $(NAME)
 
 # ----- Test -----
 check: $(TEST_PARSER) $(TEST_SERVER)
@@ -42,15 +43,15 @@ test-server: $(TEST_SERVER)
 	./$(TEST_SERVER)
 
 $(TEST_PARSER): $(TEST_PARSER_SRC)
-	$(CC) $(FLAG) -I src $(TEST_PARSER_SRC) -o $(TEST_PARSER)
+	$(CC) $(FLAG) $(INCLUDE) $(TEST_PARSER_SRC) -o $(TEST_PARSER)
 
 $(TEST_SERVER): $(TEST_SERVER_SRC)
-	$(CC) $(FLAG) -I src $(TEST_SERVER_SRC) -o $(TEST_SERVER)
+	$(CC) $(FLAG) $(INCLUDE) $(TEST_SERVER_SRC) -o $(TEST_SERVER)
 
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CC) $(FLAG) -c $< -o $@
+	$(CC) $(FLAG) $(INCLUDE) -c $< -o $@
 
 clean:
 	rm -rf $(OBJ_DIR)
