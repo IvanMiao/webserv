@@ -71,7 +71,7 @@ protected:
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
 
-	std::string	_process_request(int client_fd, const std::string& request_data);
+	std::string	_process_request(int client_fd, const HttpRequest& request);
 };
 
 

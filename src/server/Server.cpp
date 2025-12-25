@@ -176,20 +176,22 @@ void Server::_modify_epoll(int fd, uint32_t events)
 
 /*
 TEMP: make response
-TODO: the first param -> class type HttpRequest
 */
-std::string Server::_process_request(int client_fd, const std::string& request_data)
+std::string Server::_process_request(int client_fd, const HttpRequest& request)
 {
-	(void)client_fd;
 	// Simple Routing
-	if (request_data.find("GET /echo") != std::string::npos)
+	if (request.getMethod() == "GET" && request.getPath() == "/echo")
 	{
 		// Endpoint: /echo
+		// For echo, we return the raw request body (or the whole request if we used the buffer)
+		// Here we just echo the body for simplicity, or we can use _clients[client_fd].request_buffer if we want to echo everything
+		std::string body = _clients[client_fd].request_buffer; // Echoing the full raw request as before
+
 		std::stringstream response_ss;
 		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/plain\r\n"
-					<< "Content-Length: " << request_data.length() << "\r\n"
+					<< "Content-Length: " << body.length() << "\r\n"
 					<< "Server: Webserv/1.0\r\n" << "\r\n"
-					<< request_data;
+					<< body;
 
 		std::string response = response_ss.str();
 		return response;
@@ -243,21 +245,32 @@ void Server::_handle_client_data(int client_fd)
 {
 	char buffer[READ_BUFFER_SIZE];
 	ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
+	Client& client = _clients[client_fd];
 
 	if (bytes_read > 0)
 	{
-		_clients[client_fd].request_buffer.append(buffer, bytes_read);
+		client.request_buffer.append(buffer, bytes_read);
+		client.request.parse(buffer, bytes_read);
+
+		if (client.request.hasError())
+		{
+			Logger::error("Bad Request from client FD {}", client_fd);
+			std::string response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+			client.response_buffer = response;
+			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+			return;
+		}
 
 		// HTTP end detection
-		if (_clients[client_fd].request_buffer.find("\r\n\r\n") != std::string::npos)
+		if (client.request.isComplete())
 		{
 			Logger::info("----- Full Request from client FD {} -----\n{}",
-						client_fd, _clients[client_fd].request_buffer);
+						client_fd, client.request_buffer);
 			
 			// 1. Handle request, generate response 
-			std::string response = _process_request(client_fd, _clients[client_fd].request_buffer);
+			std::string response = _process_request(client_fd, client.request);
 			// 2. Save the response to Client's response_buffer
-			_clients[client_fd].response_buffer = response;
+			client.response_buffer = response;
 			// 3. modify epoll to care about EPOLLOUT(write)
 			// [TODO]: short connection vs Keep-Alive
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);

@@ -5,6 +5,7 @@
 #include <vector>
 #include <netinet/in.h>
 #include "ConfigParser.hpp"
+#include "http/HttpRequest.hpp"
 
 namespace wsv {
 
@@ -22,6 +23,8 @@ public:
 	sockaddr_in	address;
 	std::string	request_buffer;
 	std::string response_buffer;
+
+	HttpRequest request;
 
 	ClientState	state;
 	const std::vector<ServerConfig>* configs; // Associated server configs for the port
