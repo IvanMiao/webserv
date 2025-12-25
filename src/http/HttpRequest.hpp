@@ -95,10 +95,8 @@ public:
      */
     ParseState parse(const char* data, size_t len);
     
-    /**
-     * Reset request to initial state
-     * Allows reusing the same object for multiple requests
-     */
+    // Reset request to initial state
+    // Allows reusing the same object for multiple requests
     void reset();
 
 
@@ -117,10 +115,7 @@ public:
     // Check if header exists (case-insensitive)
     bool hasHeader(const std::string& key) const;
 
-    /**
-     * Get all headers
-     * @return Map of all headers (keys are lowercase)
-     */
+    // Get all headers (keys are lowercase)
     HeaderMap getHeaders() const { return _headers; }
 
 
@@ -158,20 +153,14 @@ private:
     // Parse request line: "GET /path HTTP/1.1"
     void _parseRequestLine(const std::string& line);
     
-    /**
-     * Parse URL into path and query string
-     * Example: "/api/users?id=123" -> path="/api/users", query="id=123"
-     * @param url The URL string
-     */
+    //Parse URL into path and query string
+    // Example: "/api/users?id=123" -> path="/api/users", query="id=123"
     void _parseUrl(const std::string& url);
     
 
     // ===== Header Parsing =====
     
-    /**
-     * Parse a single header line: "Key: Value"
-     * @param line The header line string
-     */
+    //Parse a single header line: "Key: Value"
     void _parseHeaderLine(const std::string& line);
 
 
