@@ -42,7 +42,7 @@ test-server: $(TEST_SERVER)
 	./$(TEST_SERVER)
 
 $(TEST_PARSER): $(TEST_PARSER_SRC)
-	$(CC) $(FLAG) -I src/config $(TEST_PARSER_SRC) -o $(TEST_PARSER)
+	$(CC) $(FLAG) -I src $(TEST_PARSER_SRC) -o $(TEST_PARSER)
 
 $(TEST_SERVER): $(TEST_SERVER_SRC)
 	$(CC) $(FLAG) -I src $(TEST_SERVER_SRC) -o $(TEST_SERVER)

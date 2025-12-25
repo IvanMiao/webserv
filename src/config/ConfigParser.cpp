@@ -203,7 +203,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 	}
 	
 	// If end of file is reached without finding '}'
-	_servers.push_back(server);
+	throw std::runtime_error("Unexpected end of file inside server block");
 }
 
 void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
@@ -333,7 +333,7 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 		}
 	}
 	
-	server.locations.push_back(location);
+	throw std::runtime_error("Error: Unexpected end of file inside location block");
 }
 
 const std::vector<ServerConfig>& ConfigParser::getServers() const
