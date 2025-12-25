@@ -20,16 +20,12 @@ namespace wsv
  */
 class RequestHandler
 {
-public:
-    /**
-     * Constructor
-     * @param config Reference to server configuration
-     */
-    explicit RequestHandler(const ServerConfig& config);
+private:
+    // Server configuration reference
+    const ServerConfig& _config;
 
-    /**
-     * Destructor
-     */
+public:
+    explicit RequestHandler(const ServerConfig& config);
     ~RequestHandler();
 
     /**
@@ -128,13 +124,6 @@ private:
     HttpResponse _execute_cgi(const HttpRequest& request,
                               const std::string& file_path,
                               const LocationConfig& location_config);
-
-    // ========================================
-    // Member Variables
-    // ========================================
-
-    // Server configuration reference
-    const ServerConfig& _config;
 };
 
 } // namespace wsv
