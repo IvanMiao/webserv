@@ -10,18 +10,12 @@
 namespace wsv
 {
 
-// ============================================================================
-// Constructor & Destructor
-// ============================================================================
-
 RequestHandler::RequestHandler(const ServerConfig& config)
     : _config(config)
-{
-}
+{ }
 
 RequestHandler::~RequestHandler()
-{
-}
+{ }
 
 // ============================================================================
 // Public Method: handleRequest

@@ -17,12 +17,9 @@ HttpResponse::HttpResponse()
     this->_setDefaultHeaders();
 }
 
-// HttpResponse Destructor
 HttpResponse::~HttpResponse()
-{
-}
+{ }
 
-// ========== Getter Methods Implementation ==========
 
 // Get the HTTP status code
 int HttpResponse::getStatus() const
@@ -113,11 +110,11 @@ void HttpResponse::_setDefaultHeaders()
     this->setHeader("Server", "Webserv/1.0");
 
     // Generate current date in HTTP format: "Day, DD Mon YYYY HH:MM:SS GMT"
-    time_t now = time(NULL);
+    time_t now = std::time(NULL);
     char date_buf[100];
-    strftime(date_buf, sizeof(date_buf),
+    std::strftime(date_buf, sizeof(date_buf),
              "%a, %d %b %Y %H:%M:%S GMT",
-             gmtime(&now));
+             std::gmtime(&now));
 
     this->setHeader("Date", date_buf);
 

@@ -24,16 +24,17 @@ public:
     HttpResponse();
     ~HttpResponse();
 
-    // ========== Setter Methods ==========
-    void setStatus(int code); // HTTP status code (e.g., 200, 404, 500)
-    void setHeader(const std::string& key, const std::string& value); // HTTP header (e.g., "Content-Type: text/html")
-    void setBody(const std::string& body); // HTTP body and automatically update Content-Length header
+    // Setters
+    void setStatus(int code); // set HTTP status code (e.g., 200, 404, 500)
+    void setHeader(const std::string& key, const std::string& value); // set HTTP header (e.g., "Content-Type: text/html")
+    void setBody(const std::string& body); // set HTTP body and automatically update Content-Length header
     void appendBody(const std::string& data); // Append data to the existing body and update Content-Length header
 
-    // ========== Getter Methods ==========
-    int getStatus() const; // Get the HTTP status code
+    // Getters
+    int getStatus() const;
     std::string getHeader(const std::string& key) const; // Get a specific header value (returns empty string if not found)
-    const std::string& getBody() const; // Get the response body
+    const std::string& getBody() const;
+
 
     // ========== Serialization ==========
     // Serialize the entire response into HTTP format (status line + headers + body)
