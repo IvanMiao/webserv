@@ -24,6 +24,48 @@ Server::~Server()
 		close(it->first);
 }
 
+/*
+	Server start and main loop
+*/
+void Server::start()
+{
+	_init_listening_sockets();
+	_init_epoll();
+
+	struct epoll_event events[MAX_EVENTS];
+
+	while (true)
+	{
+		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
+		if (nfds < 0)
+		{
+			if (errno == EINTR)
+				continue;
+			Logger::error("epoll_wait error");
+			break;
+		}
+
+		for (int i = 0; i < nfds; i++)
+		{
+			int current_fd = events[i].data.fd;
+			uint32_t events_flag = events[i].events;
+
+			if (_listen_fds.find(current_fd) != _listen_fds.end())
+				_handle_new_connection(current_fd);
+			else
+			{
+				// Read first, then handle Write
+				if (events_flag & EPOLLIN)
+					_handle_client_data(current_fd);
+				// _handle_client_data could close connection, so we should check if the fd is still there
+				if (_clients.find(current_fd) != _clients.end() && (events_flag & EPOLLOUT))
+					_handle_client_write(current_fd);
+			}
+		}
+	}
+}
+
+
 void Server::_init_listening_sockets()
 {
 	const std::vector<ServerConfig>& configs = _config.getServers();
@@ -112,47 +154,6 @@ void Server::_init_epoll()
 	}
 }
 
-/*
-	Server start and main loop
-*/
-void Server::start()
-{
-	_init_listening_sockets();
-	_init_epoll();
-
-	struct epoll_event events[MAX_EVENTS];
-
-	while (true)
-	{
-		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
-		if (nfds < 0)
-		{
-			if (errno == EINTR)
-				continue;
-			Logger::error("epoll_wait error");
-			break;
-		}
-
-		for (int i = 0; i < nfds; i++)
-		{
-			int current_fd = events[i].data.fd;
-			uint32_t events_flag = events[i].events;
-
-			if (_listen_fds.find(current_fd) != _listen_fds.end())
-				_handle_new_connection(current_fd);
-			else
-			{
-				// Read first, then handle Write
-				if (events_flag & EPOLLIN)
-					_handle_client_data(current_fd);
-				// _handle_client_data could close connection, so we should check if the fd is still there
-				if (_clients.find(current_fd) != _clients.end() && (events_flag & EPOLLOUT))
-					_handle_client_write(current_fd);
-			}
-		}
-	}
-}
-
 void Server::_add_to_epoll(int fd, uint32_t events)
 {
 	struct epoll_event event;
@@ -171,53 +172,6 @@ void Server::_modify_epoll(int fd, uint32_t events)
 
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_MOD, fd, &event) < 0)
 		throw std::runtime_error("epoll_ctl mod failed");
-}
-
-
-/*
-TEMP: make response
-*/
-std::string Server::_process_request(int client_fd, const HttpRequest& request)
-{
-	// Simple Routing
-	if (request.getMethod() == "GET" && request.getPath() == "/echo")
-	{
-		// Endpoint: /echo
-		// For echo, we return the raw request body (or the whole request if we used the buffer)
-		// Here we just echo the body for simplicity, or we can use _clients[client_fd].request_buffer if we want to echo everything
-		std::string body = _clients[client_fd].request_buffer; // Echoing the full raw request as before
-
-		std::stringstream response_ss;
-		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/plain\r\n"
-					<< "Content-Length: " << body.length() << "\r\n"
-					<< "Server: Webserv/1.0\r\n" << "\r\n"
-					<< body;
-
-		std::string response = response_ss.str();
-		return response;
-	}
-	else
-	{
-		// Endpoint: / (or anything else), Returns index.html
-		std::ifstream index_file("./www/index.html");
-		std::ifstream error_file("./www/errors/error.html");
-		std::stringstream buffer_ss;
-		if (index_file)
-			buffer_ss << index_file.rdbuf();  // Use rdbuf to read all the contents to buffer_ss
-		else
-			buffer_ss << error_file.rdbuf();
-		
-		std::string html_content = buffer_ss.str();
-		
-		std::stringstream response_ss;
-		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/html\r\n"
-					<< "Content-Length: " << html_content.length() << "\r\n"
-					<< "Server: Webserv/1.0\r\n" << "\r\n"
-					<< html_content;
-
-		std::string response = response_ss.str();
-		return response;
-	}
 }
 
 void Server::_handle_new_connection(int listen_fd)
@@ -325,5 +279,50 @@ void Server::_handle_client_write(int client_fd)
 	}
 }
 
+/*
+TEMP: make response
+*/
+std::string Server::_process_request(int client_fd, const HttpRequest& request)
+{
+	// Simple Routing
+	if (request.getMethod() == "GET" && request.getPath() == "/echo")
+	{
+		// Endpoint: /echo
+		// For echo, we return the raw request body (or the whole request if we used the buffer)
+		// Here we just echo the body for simplicity, or we can use _clients[client_fd].request_buffer if we want to echo everything
+		std::string body = _clients[client_fd].request_buffer; // Echoing the full raw request as before
+
+		std::stringstream response_ss;
+		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/plain\r\n"
+					<< "Content-Length: " << body.length() << "\r\n"
+					<< "Server: Webserv/1.0\r\n" << "\r\n"
+					<< body;
+
+		std::string response = response_ss.str();
+		return response;
+	}
+	else
+	{
+		// Endpoint: / (or anything else), Returns index.html
+		std::ifstream index_file("./www/index.html");
+		std::ifstream error_file("./www/errors/error.html");
+		std::stringstream buffer_ss;
+		if (index_file)
+			buffer_ss << index_file.rdbuf();  // Use rdbuf to read all the contents to buffer_ss
+		else
+			buffer_ss << error_file.rdbuf();
+		
+		std::string html_content = buffer_ss.str();
+		
+		std::stringstream response_ss;
+		response_ss << "HTTP/1.1 200 OK\r\n" << "Content-Type: text/html\r\n"
+					<< "Content-Length: " << html_content.length() << "\r\n"
+					<< "Server: Webserv/1.0\r\n" << "\r\n"
+					<< html_content;
+
+		std::string response = response_ss.str();
+		return response;
+	}
+}
 
 } // namespace wsv

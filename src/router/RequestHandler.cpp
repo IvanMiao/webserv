@@ -125,14 +125,8 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
 /**
  * Handle POST requests
  * Supports file upload or CGI execution
+ * Process: Check for upload -> check file exists -> handle CGI scripts -> or return 405
  */
-
- // ============================================================================
-// _handlePost - Handles POST requests
-// ============================================================================
-// Process: Check for upload -> check file exists -> handle CGI scripts -> or return 405
-// ============================================================================
-
 HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
                                          const LocationConfig& location_config)
 {
