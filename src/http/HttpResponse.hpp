@@ -22,37 +22,20 @@ private:
 public:
     // Constructor: initializes response with HTTP 200 status and default headers
     HttpResponse();
-    
-    // Destructor
     ~HttpResponse();
 
     // ========== Setter Methods ==========
-    
-    // Set the HTTP status code (e.g., 200, 404, 500)
-    void setStatus(int code);
-    
-    // Add or update an HTTP header with the given key-value pair
-    void setHeader(const std::string& key, const std::string& value);
-    
-    // Set the response body and automatically update Content-Length header
-    void setBody(const std::string& body);
-    
-    // Append data to the existing body and update Content-Length header
-    void appendBody(const std::string& data);
+    void setStatus(int code); // HTTP status code (e.g., 200, 404, 500)
+    void setHeader(const std::string& key, const std::string& value); // HTTP header (e.g., "Content-Type: text/html")
+    void setBody(const std::string& body); // HTTP body and automatically update Content-Length header
+    void appendBody(const std::string& data); // Append data to the existing body and update Content-Length header
 
-    // ========== Getter Methods ==========  // 新增这个部分
-    
-    // Get the HTTP status code
-    int getStatus() const;
-    
-    // Get a specific header value (returns empty string if not found)
-    std::string getHeader(const std::string& key) const;
-    
-    // Get the response body
-    const std::string& getBody() const;
+    // ========== Getter Methods ==========
+    int getStatus() const; // Get the HTTP status code
+    std::string getHeader(const std::string& key) const; // Get a specific header value (returns empty string if not found)
+    const std::string& getBody() const; // Get the response body
 
     // ========== Serialization ==========
-    
     // Serialize the entire response into HTTP format (status line + headers + body)
     std::string serialize() const;
 
