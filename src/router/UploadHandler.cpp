@@ -1,6 +1,6 @@
 #include "UploadHandler.hpp"
 #include "FileHandler.hpp"
-#include "../utils/StringHelper.hpp"
+#include "utils/StringUtils.hpp"
 #include <sys/stat.h>
 #include <fstream>
 #include <ctime>
@@ -83,7 +83,7 @@ HttpResponse UploadHandler::_validate_upload_directory(const std::string& upload
 HttpResponse UploadHandler::_validate_filename(const std::string& filename)
 {
     if (filename.empty() ||
-        StringHelper::hasPathTraversal(filename) ||
+        filename.find("..") != std::string::npos ||
         filename.find("/") != std::string::npos ||
         filename.find("\\") != std::string::npos)
     {
@@ -196,7 +196,7 @@ std::string UploadHandler::_extract_multipart_filename(const std::string& conten
  */
 std::string UploadHandler::_generate_default_filename()
 {
-    return "uploaded_file_" + StringHelper::toString(std::time(NULL));
+    return "uploaded_file_" + StringUtils::toString(std::time(NULL));
 }
 
 /**

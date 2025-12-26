@@ -1,5 +1,5 @@
 #include "ConfigParser.hpp"
-#include "../utils/StringUtils.hpp"
+#include "utils/StringUtils.hpp"
 #include <cctype> 
 #include <cstdlib> 
 #include <algorithm>

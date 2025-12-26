@@ -4,7 +4,7 @@
 #include <string>
 #include <map>
 
-#include "../utils/StringUtils.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace wsv
 {

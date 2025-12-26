@@ -3,7 +3,7 @@
 #include "UploadHandler.hpp"
 #include "CgiRequestHandler.hpp"
 #include "ErrorHandler.hpp"
-#include "StringHelper.hpp"
+#include "utils/StringUtils.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -33,7 +33,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
-    if (_hasPathTraversal(request.getPath()))
+    if (request.getPath().find("..") != std::string::npos)
     {
         std::cerr << "[DEBUG HANDLER] Path traversal detected, returning 403" << std::endl;
         return ErrorHandler::get_error_page(403, _config);
@@ -72,19 +72,6 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return _handleDelete(request, *location_config);
 
     return ErrorHandler::get_error_page(501, _config);
-}
-
-// ============================================================================
-// Private Methods: Utility Functions
-// ============================================================================
-
-/**
- * Check for path traversal attacks
- * Path traversal occurs when the URI contains ".." which attempts to go up directories
- */
-bool RequestHandler::_hasPathTraversal(const std::string& uri_path) const
-{
-    return uri_path.find("..") != std::string::npos;
 }
 
 // ============================================================================
@@ -232,7 +219,7 @@ std::string RequestHandler::_buildFilePath(const std::string& uri_path,
     if (relative_path.empty() || relative_path[0] != '/')
         relative_path = "/" + relative_path;
 
-    relative_path = StringHelper::urlDecode(relative_path);
+    relative_path = StringUtils::urlDecode(relative_path);
 
     return location_config.root + relative_path;
 }

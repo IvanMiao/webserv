@@ -68,17 +68,6 @@ private:
     HttpResponse _handleDelete(const HttpRequest& request,
                                const LocationConfig& location_config);
 
-    // ========================================
-    // Utility Methods
-    // ========================================
-
-    /**
-     * Check for path traversal attacks in the URI
-     * @param uri_path URI from HTTP request
-     * @return true if path traversal attempt is detected
-     */
-    bool _hasPathTraversal(const std::string& uri_path) const;
-
     /**
      * Build filesystem path from URI
      * Handles path prefix stripping, URL decoding, and root joining

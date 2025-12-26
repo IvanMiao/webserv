@@ -1,6 +1,6 @@
 #include "ErrorHandler.hpp"
 #include "FileHandler.hpp"
-#include "../utils/StringHelper.hpp"
+#include "utils/StringUtils.hpp"
 #include <map>
 
 namespace wsv {
@@ -63,9 +63,9 @@ std::string ErrorHandler::_generate_default_error_page(int status_code)
     }
 
     // Build simple HTML page
-    std::string html = "<html><head><title>" + StringHelper::toString(status_code) +
+    std::string html = "<html><head><title>" + StringUtils::toString(status_code) +
                        " " + status_text + "</title></head>";
-    html += "<body><h1>" + StringHelper::toString(status_code) + " " +
+    html += "<body><h1>" + StringUtils::toString(status_code) + " " +
             status_text + "</h1>";
     html += "<hr><p>Web Server</p></body></html>";
 

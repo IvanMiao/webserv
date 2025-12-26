@@ -32,8 +32,6 @@ public:
 	std::string	cgi_extension;  // .py, .php
 	std::string	cgi_path;       // CGI excutable path /usr/bin/python3
 
-	//[TODO]: more params?
-
 public:
 	LocationConfig();
 

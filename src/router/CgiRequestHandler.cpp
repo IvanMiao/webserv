@@ -1,6 +1,6 @@
 #include "CgiRequestHandler.hpp"
-#include "../cgi/CgiHandler.hpp"
-#include "../utils/StringHelper.hpp"
+#include "cgi/CgiHandler.hpp"
+#include "utils/StringUtils.hpp"
 #include <iostream>
 #include <sstream>
 
@@ -104,7 +104,7 @@ std::map<std::string, std::string> CgiRequestHandler::_build_cgi_environment(
             relative_path = request.getPath().substr(location_config.path.size());
         if (relative_path.empty() || relative_path[0] != '/')
             relative_path = "/" + relative_path;
-        relative_path = StringHelper::urlDecode(relative_path);
+        relative_path = StringUtils::urlDecode(relative_path);
         env_vars["SCRIPT_FILENAME"] = location_config.root + relative_path;
     }
 
@@ -119,7 +119,7 @@ std::map<std::string, std::string> CgiRequestHandler::_build_cgi_environment(
 
     // SERVER_NAME and SERVER_PORT
     env_vars["SERVER_NAME"] = server_config.host;
-    env_vars["SERVER_PORT"] = StringHelper::toString(server_config.listen_port);
+    env_vars["SERVER_PORT"] = StringUtils::toString(server_config.listen_port);
 
     // CONTENT_LENGTH and CONTENT_TYPE for POST/PUT
     if (request.hasHeader("Content-Length"))
