@@ -66,6 +66,8 @@ void Server::start()
 }
 
 
+// _init_listening_sockets + _create_listening_socket
+// create listing sockets and bind them to serverconfigs -> _listen_fds
 void Server::_init_listening_sockets()
 {
 	const std::vector<ServerConfig>& configs = _config.getServers();
@@ -174,6 +176,7 @@ void Server::_modify_epoll(int fd, uint32_t events)
 		throw std::runtime_error("epoll_ctl mod failed");
 }
 
+// create Client
 void Server::_handle_new_connection(int listen_fd)
 {
 	sockaddr_in client_addr;
@@ -189,12 +192,14 @@ void Server::_handle_new_connection(int listen_fd)
 	int flags = fcntl(client_fd, F_GETFL, 0);
 	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
-	_clients.insert(std::make_pair(client_fd, Client(client_fd, client_addr, &_listen_fds[listen_fd])));
+	Client client = Client(client_fd, client_addr, &_listen_fds[listen_fd]);
+	_clients.insert(std::make_pair(client_fd, client));
 
 	_add_to_epoll(client_fd, EPOLLIN);
 	Logger::info("New connection accepted on fd {}. Client socket fd: {}", listen_fd, client_fd);
 }
 
+// Client - Read
 void Server::_handle_client_data(int client_fd)
 {
 	char buffer[READ_BUFFER_SIZE];
@@ -248,6 +253,7 @@ void Server::_handle_client_data(int client_fd)
 	}
 }
 
+// Client - Write
 void Server::_handle_client_write(int client_fd)
 {
 	Client& client = _clients[client_fd];
@@ -273,6 +279,9 @@ void Server::_handle_client_write(int client_fd)
 		Logger::info("Response sent fully to FD {}", client_fd);
 
 		// [TODO]: short-connection or Kepp-Alive
+		// _modify_epoll(client_fd, EPOLLIN);
+		// client.request.reset();
+
 		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 		close(client_fd);
 		_clients.erase(client_fd);
