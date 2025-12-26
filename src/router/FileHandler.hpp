@@ -78,12 +78,6 @@ private:
      */
     static HttpResponse _generate_directory_listing(const std::string& dir_path,
                                                     const std::string& uri_path);
-
-    // ========================================
-    // Private Member Variables
-    // ========================================
-
-    // (Currently, FileHandler is fully static, so no instance variables)
 };
 
 } // namespace wsv

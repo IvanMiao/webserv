@@ -192,22 +192,14 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
 
 /**
  * Convert URI path to filesystem path
- * Handles root, location path stripping, and URL decoding
+ * Uses Nginx 'root' directive semantics: root + full URI path
+ * Example: root ./www, URI /uploads/file.txt -> ./www/uploads/file.txt
  */
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
-    std::string relative_path = uri_path;
-
-    if (uri_path.find(location_config.path) == 0)
-        relative_path = uri_path.substr(location_config.path.size());
-
-    if (relative_path.empty() || relative_path[0] != '/')
-        relative_path = "/" + relative_path;
-
-    relative_path = StringUtils::urlDecode(relative_path);
-
-    return location_config.root + relative_path;
+    std::string decoded_path = StringUtils::urlDecode(uri_path);
+    return location_config.root + decoded_path;
 }
 
 
