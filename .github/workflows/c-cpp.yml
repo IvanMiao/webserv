@@ -2,7 +2,7 @@ name: C++ Werbserv CI
 
 on:
   push:
-    branches: [ "main", "ymiao/improve-server" ]
+    branches: [ "main", "migrate-http" ]
   pull_request:
     branches: [ "main" ]
 

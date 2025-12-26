@@ -104,6 +104,13 @@ bool HttpRequest::_tryParseRequestLine()
         return false;  // Need more data
     }
 
+    // Check if request line exceeds limit
+    if (line_end > MAX_REQUEST_LINE_SIZE)
+    {
+        _state = PARSE_ERROR;
+        return false;
+    }
+
     // Extract and parse request line
     std::string request_line = _buffer.substr(0, line_end);
     _buffer.erase(0, line_end + 2);  // Remove line and \r\n
@@ -178,6 +185,15 @@ bool HttpRequest::_tryParseHeaders()
                 _state = PARSE_ERROR;
             }
             return false;  // Need more data
+        }
+
+        // Check if header line exceeds limit
+        // Note: This is a simple check per line. For total header size limit, 
+        // we would need to track total bytes consumed by headers.
+        if (line_end > MAX_HEADER_SIZE)
+        {
+            _state = PARSE_ERROR;
+            return false;
         }
 
         // Extract line
