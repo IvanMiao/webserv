@@ -16,9 +16,12 @@ public:
 	TestServer(wsv::ConfigParser& config) : wsv::Server(config) {}
 	
 	// Expose protected methods for testing
-	std::string process_request(int client_fd, const wsv::HttpRequest& request)
+	std::string process_request(const wsv::HttpRequest& request, const wsv::ServerConfig& config)
 	{
-		return _process_request(client_fd, request);
+		// Create RequestHandler and process the request directly
+		wsv::RequestHandler handler(config);
+		wsv::HttpResponse response = handler.handleRequest(request);
+		return response.serialize();
 	}
 };
 
@@ -92,29 +95,6 @@ void test_location_matching_logic(TestRunner& runner)
 
 // ==================== Server Request Processing Tests ====================
 
-void test_server_echo_response(TestRunner& runner)
-{
-	runner.startTest("Server handles /echo request");
-	try {
-		wsv::ConfigParser parser("test/test.conf");
-		parser.parse();
-		TestServer server(parser);
-		
-		std::string request_raw = "GET /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: 11\r\n\r\nHello World";
-		wsv::HttpRequest request(request_raw);
-		std::string response = server.process_request(0, request);
-		
-		// Verify response structure
-		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");
-		if (response.find("Content-Type: text/plain") == std::string::npos) throw std::runtime_error("Response missing Content-Type");
-		if (response.find("Hello World") == std::string::npos) throw std::runtime_error("Response missing body");
-		
-		runner.pass();
-	} catch (const std::exception& e) {
-		runner.fail(e.what());
-	}
-}
-
 void test_server_static_file_response(TestRunner& runner)
 {
 	runner.startTest("Server handles static file request (index.html)");
@@ -123,13 +103,40 @@ void test_server_static_file_response(TestRunner& runner)
 		parser.parse();
 		TestServer server(parser);
 		
+		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
+		if (servers.empty()) throw std::runtime_error("No server config found");
+		
 		std::string request_raw = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
 		wsv::HttpRequest request(request_raw);
-		std::string response = server.process_request(0, request);
+		std::string response = server.process_request(request, servers[0]);
 		
 		if (response.find("HTTP/1.1 200 OK") == std::string::npos) throw std::runtime_error("Response missing 200 OK");
 		if (response.find("Content-Type: text/html") == std::string::npos) throw std::runtime_error("Response missing Content-Type");
 		if (response.find("Hello, Browser.") == std::string::npos) throw std::runtime_error("Response missing file content");
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
+void test_server_not_found_response(TestRunner& runner)
+{
+	runner.startTest("Server returns 404 for non-existent location (/echo)");
+	try {
+		wsv::ConfigParser parser("test/test.conf");
+		parser.parse();
+		TestServer server(parser);
+		
+		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
+		if (servers.empty()) throw std::runtime_error("No server config found");
+		
+		std::string request_raw = "GET /echo HTTP/1.1\r\nHost: localhost\r\n\r\n";
+		wsv::HttpRequest request(request_raw);
+		std::string response = server.process_request(request, servers[0]);
+		
+		// Should return 404 for non-existent path
+		if (response.find("HTTP/1.1 404") == std::string::npos) throw std::runtime_error("Expected 404 response");
 		
 		runner.pass();
 	} catch (const std::exception& e) {
@@ -142,7 +149,7 @@ void test_server_static_file_response(TestRunner& runner)
 int main()
 {
 	std::cout << BOLD << "========================================" << RESET << std::endl;
-	std::cout << BOLD << "  Webserv Practical Test Suite" << RESET << std::endl;
+	std::cout << BOLD << "  Server Test Suite" << RESET << std::endl;
 	std::cout << BOLD << "========================================" << RESET << std::endl << std::endl;
 
 	TestRunner runner;
@@ -155,10 +162,8 @@ int main()
 
 	// Server Logic Tests
 	std::cout << BOLD << "--- Server Request Processing ---" << RESET << std::endl;
-	test_server_echo_response(runner);
 	test_server_static_file_response(runner);
-	std::cout << std::endl;
-
+	test_server_not_found_response(runner);
 	runner.summary();
 
 	return runner.allPassed() ? 0 : 1;

@@ -10,6 +10,10 @@ TEST_SERVER_SRC	:= test/test_server.cpp \
 				   src/server/Client.cpp \
 				   src/http/HttpRequest.cpp \
 				   src/http/HttpResponse.cpp \
+				   src/router/RequestHandler.cpp \
+				   src/router/FileHandler.cpp \
+				   src/router/UploadHandler.cpp \
+				   src/router/ErrorHandler.cpp \
 				   src/utils/Logger.cpp \
 				   src/utils/StringUtils.cpp
 

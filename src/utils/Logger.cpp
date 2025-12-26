@@ -52,9 +52,14 @@ void Logger::error(const std::string& message)
 
 void Logger::debug(const std::string& message)
 {
+#ifdef DEBUG
 	std::cout << "[" << getTimestamp() << "] "
 			  << BLUE << "DEBUG" << RESET << ": "
 			  << message << std::endl;
+#else
+	(void) message;
+	return;
+#endif
 }
 
 } // namespace wsv
