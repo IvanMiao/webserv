@@ -2,9 +2,11 @@
 #define REQUEST_HANDLER_HPP
 
 #include <string>
-#include "HttpRequest.hpp"
-#include "HttpResponse.hpp"
-#include "ConfigParser.hpp"
+#include "http/HttpRequest.hpp"
+#include "http/HttpResponse.hpp"
+#include "config/ConfigParser.hpp"
+#include "utils/Logger.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace wsv
 {

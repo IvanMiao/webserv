@@ -50,4 +50,11 @@ void Logger::error(const std::string& message)
 			  << message << std::endl;
 }
 
+void Logger::debug(const std::string& message)
+{
+	std::cout << "[" << getTimestamp() << "] "
+			  << BLUE << "DEBUG" << RESET << ": "
+			  << message << std::endl;
+}
+
 } // namespace wsv

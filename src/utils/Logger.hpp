@@ -10,6 +10,7 @@
 #define GREEN	"\033[32m"
 #define YELLOW	"\033[33m"
 #define RED		"\033[31m"
+#define BLUE	"\033[34m"
 
 namespace wsv
 {
@@ -20,6 +21,7 @@ public:
 	static void info(const std::string& message);
 	static void warning(const std::string& message);
 	static void error(const std::string& message);
+	static void debug(const std::string& message);
 
 	template <typename T1>
 	static void info(const std::string &format, T1 a1);
@@ -32,6 +34,12 @@ public:
 
 	template <typename T1, typename T2>
 	static void error(const std::string &format, T1 a1, T2 a2);
+
+	template <typename T1>
+	static void debug(const std::string &format, T1 a1);
+
+	template <typename T1, typename T2>
+	static void debug(const std::string &format, T1 a1, T2 a2);
 
 private:
 	static std::string getTimestamp();
@@ -75,6 +83,25 @@ void Logger::error(const std::string &format, T1 a1, T2 a2)
 	oss2 << a2;
 	std::string args[] = {oss1.str(), oss2.str()};
 	info(formatMessage(format, args, 2));
+}
+
+template <typename T1>
+void Logger::debug(const std::string &format, T1 a1)
+{
+	std::ostringstream oss;
+	oss << a1;
+	std::string args[] = {oss.str()};
+	debug(formatMessage(format, args, 1));
+}
+
+template <typename T1, typename T2>
+void Logger::debug(const std::string &format, T1 a1, T2 a2)
+{
+	std::ostringstream oss1, oss2;
+	oss1 << a1;
+	oss2 << a2;
+	std::string args[] = {oss1.str(), oss2.str()};
+	debug(formatMessage(format, args, 2));
 }
 
 

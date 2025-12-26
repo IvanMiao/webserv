@@ -3,7 +3,6 @@
 #include "UploadHandler.hpp"
 #include "CgiRequestHandler.hpp"
 #include "ErrorHandler.hpp"
-#include "utils/StringUtils.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -27,15 +26,15 @@ RequestHandler::~RequestHandler()
  */
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
-    std::cerr << "[UNIQUE_MARKER_12345] START handleRequest" << std::endl;
+    Logger::debug("START handleRequest");
     std::string method = request.getMethod();
-    std::cerr << "[DEBUG HANDLER] URI = " << request.getPath() << ", Method = " << method << std::endl;
+    Logger::debug("URI = {}, Method = {}", request.getPath(), method);
     
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
     if (request.getPath().find("..") != std::string::npos)
     {
-        std::cerr << "[DEBUG HANDLER] Path traversal detected, returning 403" << std::endl;
+        Logger::debug("Path traversal detected, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
     
@@ -46,7 +45,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 
     if (!location_config->isMethodAllowed(method))
     {
-        std::cerr << "[DEBUG HANDLER] Method not allowed: " << method << std::endl;
+        Logger::debug("Method not allowed: {}", method);
         return ErrorHandler::get_error_page(405, _config);
     }
 
@@ -65,7 +64,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return _handleGet(request, *location_config);
     else if (method == "POST")
     {
-        std::cerr << "[DEBUG HANDLER] Routing to _handlePost" << std::endl;
+        Logger::debug("Routing to _handlePost");
         return _handlePost(request, *location_config);
     }
     else if (method == "DELETE")
@@ -117,12 +116,12 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
 HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
                                          const LocationConfig& location_config)
 {
-    std::cerr << "[DEBUG POST] Method = " << request.getMethod() << ", Path = " << request.getPath() << std::endl;
-    std::cerr << "[DEBUG POST] upload_enable = " << (location_config.upload_enable ? "true" : "false") << std::endl;
+    Logger::debug("Method = {}, Path = {}", request.getMethod(), request.getPath());
+    Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
     
     // 上传开启 → 调用 UploadHandler
     if (location_config.upload_enable) {
-        std::cerr << "[DEBUG POST] Calling UploadHandler" << std::endl;
+        Logger::debug("Calling UploadHandler");
         return UploadHandler::handle_upload(request, location_config);
     }
 
@@ -172,31 +171,31 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
     // Path traversal check is now done in handleRequest() before method validation
     std::string file_path = _buildFilePath(request.getPath(), location_config);
 
-    std::cerr << "[DEBUG DELETE] Full file path: " << file_path << std::endl;
+    Logger::debug("Full file path: {}", file_path);
 
     if (!FileHandler::file_exists(file_path)) {
-        std::cerr << "[DEBUG DELETE] File does not exist, returning 404" << std::endl;
+        Logger::debug("File does not exist, returning 404");
         return ErrorHandler::get_error_page(404, _config);
     }
 
     if (FileHandler::is_directory(file_path)) {
-        std::cerr << "[DEBUG DELETE] Path is a directory, returning 403" << std::endl;
+        Logger::debug("Path is a directory, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
 
-    std::cerr << "[DEBUG DELETE] Attempting to remove file: " << file_path << std::endl;
+    Logger::debug("Attempting to remove file: {}", file_path);
     int remove_result = std::remove(file_path.c_str());
-    std::cerr << "[DEBUG DELETE] Remove returned: " << remove_result << std::endl;
+    Logger::debug("Remove returned: {}", remove_result);
     
     if (remove_result == 0)
     {
-        std::cerr << "[DEBUG DELETE] File deleted successfully, returning 204" << std::endl;
+        Logger::debug("File deleted successfully, returning 204");
         HttpResponse response;
         response.setStatus(204); // No Content
         return response;
     }
 
-    std::cerr << "[DEBUG DELETE] Remove failed, returning 500" << std::endl;
+    Logger::debug("Remove failed, returning 500");
     return ErrorHandler::get_error_page(500, _config);
 }
 
