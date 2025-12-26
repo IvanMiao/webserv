@@ -17,7 +17,7 @@ Server::~Server()
 	if (_epoll_fd >= 0)
 		close(_epoll_fd);
 	
-	for (std::map<int, std::vector<ServerConfig> >::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
+	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
 		close(it->first);
 
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
@@ -71,21 +71,13 @@ void Server::start()
 void Server::_init_listening_sockets()
 {
 	const std::vector<ServerConfig>& configs = _config.getServers();
-	std::map<std::pair<std::string, int>, int> host_port_to_fd;
 
 	for (size_t i = 0; i < configs.size(); ++i)
 	{
 		const ServerConfig& conf = configs[i];
-		std::pair<std::string, int> key(conf.host, conf.listen_port);
-
-		if (host_port_to_fd.find(key) == host_port_to_fd.end())
-		{
-			int fd = _create_listening_socket(conf.host, conf.listen_port);
-			host_port_to_fd[key] = fd;
-			_listen_fds[fd] = std::vector<ServerConfig>();
-			Logger::info("Server is listening on {}:{} ...", conf.host, conf.listen_port);
-		}
-		_listen_fds[host_port_to_fd[key]].push_back(conf);
+		int fd = _create_listening_socket(conf.host, conf.listen_port);
+		_listen_fds[fd] = conf;
+		Logger::info("Server is listening on {}:{} ...", conf.host, conf.listen_port);
 	}
 }
 
@@ -150,7 +142,7 @@ void Server::_init_epoll()
 	if (_epoll_fd < 0)
 		throw std::runtime_error("epoll_create failed");
 
-	for (std::map<int, std::vector<ServerConfig> >::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
+	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
 	{
 		_add_to_epoll(it->first, EPOLLIN);
 	}
@@ -192,7 +184,9 @@ void Server::_handle_new_connection(int listen_fd)
 	int flags = fcntl(client_fd, F_GETFL, 0);
 	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
-	Client client = Client(client_fd, client_addr, &_listen_fds[listen_fd]);
+	// Get the ServerConfig for this listening port
+	const ServerConfig* config = &_listen_fds[listen_fd];
+	Client client = Client(client_fd, client_addr, config);
 	_clients.insert(std::make_pair(client_fd, client));
 
 	_add_to_epoll(client_fd, EPOLLIN);
@@ -233,8 +227,6 @@ void Server::_handle_client_data(int client_fd)
 			// 3. modify epoll to care about EPOLLOUT(write)
 			// [TODO]: short connection vs Keep-Alive
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
-
-			Logger::info("Request received, preparing to send response...");
 		}
 	}
 	else if (bytes_read == 0)
@@ -289,35 +281,28 @@ void Server::_handle_client_write(int client_fd)
 }
 
 /*
-TEMP: make response
+	Process request using RequestHandler
 */
 std::string Server::_process_request(int client_fd, const HttpRequest& request)
 {
-	(void)client_fd;
-	// Simple Routing
-	if (request.getMethod() == "GET" && request.getPath() == "/echo")
-	{
-		// Endpoint: /echo
-		// For echo, we return the request body
-		std::string body = request.getBody();
+	Logger::info("Request received, preparing to send response...");
+	Client& client = _clients[client_fd];
+	const ServerConfig* config = client.config;
 
-		return HttpResponse::createOkResponse(body, "text/plain").serialize();
-	}
-	else
+	if (!config)
 	{
-		// Endpoint: / (or anything else), Returns index.html
-		std::ifstream index_file("./www/index.html");
-		std::ifstream error_file("./www/errors/error.html");
-		std::stringstream buffer_ss;
-		if (index_file)
-			buffer_ss << index_file.rdbuf();  // Use rdbuf to read all the contents to buffer_ss
-		else
-			buffer_ss << error_file.rdbuf();
-		
-		std::string html_content = buffer_ss.str();
-		
-		return HttpResponse::createOkResponse(html_content, "text/html").serialize();
+		Logger::error("No server config found for client FD {}", client_fd);
+		return HttpResponse::createErrorResponse(500).serialize();
 	}
+
+	// Create RequestHandler and process the request
+	RequestHandler handler(*config);
+	HttpResponse response = handler.handleRequest(request);
+	
+	Logger::info("Response built - Status: {}, Request: {} {}", 
+	             response.getStatus(), request.getMethod(), request.getPath());
+	
+	return response.serialize();
 }
 
 } // namespace wsv

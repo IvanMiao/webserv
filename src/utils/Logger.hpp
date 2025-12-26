@@ -29,6 +29,9 @@ public:
 	template <typename T1, typename T2>
 	static void info(const std::string &format, T1 a1, T2 a2);
 
+	template <typename T1, typename T2, typename T3>
+	static void info(const std::string &format, T1 a1, T2 a2, T3 a3);
+
 	template <typename T1>
 	static void error(const std::string &format, T1 a1);
 
@@ -64,6 +67,17 @@ void Logger::info(const std::string &format, T1 a1, T2 a2)
 	oss2 << a2;
 	std::string args[] = {oss1.str(), oss2.str()};
 	info(formatMessage(format, args, 2));
+}
+
+template <typename T1, typename T2, typename T3>
+void Logger::info(const std::string &format, T1 a1, T2 a2, T3 a3)
+{
+	std::ostringstream oss1, oss2, oss3;
+	oss1 << a1;
+	oss2 << a2;
+	oss3 << a3;
+	std::string args[] = {oss1.str(), oss2.str(), oss3.str()};
+	info(formatMessage(format, args, 3));
 }
 
 template <typename T1>

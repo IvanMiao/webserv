@@ -27,11 +27,11 @@ public:
 	HttpRequest request;
 
 	ClientState	state;
-	const std::vector<ServerConfig>* configs; // Associated server configs for the port
+	const ServerConfig* config; // Associated server config for this connection
 
 public:
 	Client();
-	Client(int fd, sockaddr_in addr, const std::vector<ServerConfig>* configs);
+	Client(int fd, sockaddr_in addr, const ServerConfig* config);
 	~Client(); // fd is closed by Server
 };
 

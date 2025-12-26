@@ -17,9 +17,10 @@
 #include <vector>
 
 #include "Client.hpp"
+#include "config/ConfigParser.hpp"
 #include "http/HttpRequest.hpp"
 #include "http/HttpResponse.hpp"
-#include "config/ConfigParser.hpp"
+#include "router/RequestHandler.hpp"
 #include "utils/StringUtils.hpp"
 #include "utils/Logger.hpp"
 
@@ -47,8 +48,8 @@ private:
 	ConfigParser&	_config;
 	int				_epoll_fd;
 
-	// Map of listening socket FDs to their associated server configurations
-	std::map<int, std::vector<ServerConfig> > _listen_fds;
+	// Map of listening socket FDs to their associated server configuration
+	std::map<int, ServerConfig> _listen_fds;
 	std::map<int, Client> _clients;
 
 public:

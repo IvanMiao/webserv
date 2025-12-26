@@ -7,6 +7,8 @@ SRC_FILES	:= main.cpp \
 				config/ConfigParser.cpp \
 				server/Server.cpp server/Client.cpp \
 				http/HttpRequest.cpp http/HttpResponse.cpp \
+				router/RequestHandler.cpp router/FileHandler.cpp \
+				router/ErrorHandler.cpp router/UploadHandler.cpp \
 				utils/Logger.cpp utils/StringUtils.cpp
 
 SRC_DIR	:= src

@@ -1,7 +1,7 @@
 #include "RequestHandler.hpp"
 #include "FileHandler.hpp"
 #include "UploadHandler.hpp"
-#include "CgiRequestHandler.hpp"
+// #include "CgiRequestHandler.hpp"
 #include "ErrorHandler.hpp"
 #include <algorithm>
 #include <iostream>
@@ -98,8 +98,10 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
         return response;
     }
 
+    /*
     if (_isCgiRequest(file_path, location_config))
         return _execute_cgi(request, file_path, location_config);
+    */
 
     HttpResponse response = _serve_file(file_path);
     if (request.getMethod() == "HEAD")
@@ -120,7 +122,8 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
     
     // 上传开启 → 调用 UploadHandler
-    if (location_config.upload_enable) {
+    if (location_config.upload_enable)
+    {
         Logger::debug("Calling UploadHandler");
         return UploadHandler::handle_upload(request, location_config);
     }
@@ -128,6 +131,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     // 构建文件路径
     std::string file_path = _buildFilePath(request.getPath(), location_config);
 
+    /*
     // CGI POST 请求
     if (_isCgiRequest(file_path, location_config))
     {
@@ -138,28 +142,11 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
         }
         return _execute_cgi(request, file_path, location_config);
     }
+    */
 
     // 其他情况 POST 不允许
     return ErrorHandler::get_error_page(405, _config);
 }
-
-// HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
-//                                          const LocationConfig& location_config)
-// {
-//     if (location_config.upload_enable)
-//         return UploadHandler::handle_upload(request, location_config);
-
-//     std::string file_path = _buildFilePath(request.getPath(), location_config);
-
-//     if (!FileHandler::file_exists(file_path))
-//         return ErrorHandler::get_error_page(404, _config);
-
-//     if (_isCgiRequest(file_path, location_config))
-//         return _execute_cgi(request, file_path, location_config);
-
-//     return ErrorHandler::get_error_page(405, _config);
-// }
-
 
 /**
  * Handle DELETE requests
@@ -223,9 +210,9 @@ std::string RequestHandler::_buildFilePath(const std::string& uri_path,
     return location_config.root + relative_path;
 }
 
-/**
- * Check if file is a CGI script based on configured extension
- */
+
+// Check if file is a CGI script based on configured extension
+/*
 bool RequestHandler::_isCgiRequest(const std::string& file_path,
                                    const LocationConfig& location_config) const
 {
@@ -239,6 +226,7 @@ bool RequestHandler::_isCgiRequest(const std::string& file_path,
     std::string ext = file_path.substr(ext_pos);
     return (ext == location_config.cgi_extension);
 }
+*/
 
 /**
  * Serve static file
@@ -266,12 +254,14 @@ HttpResponse RequestHandler::_serve_directory(const std::string& dir_path,
 /**
  * Execute CGI script
  */
+/*
 HttpResponse RequestHandler::_execute_cgi(const HttpRequest& request,
                                           const std::string& file_path,
                                           const LocationConfig& location_config)
 {
     return CgiRequestHandler::execute_cgi(request, file_path, location_config, _config);
 }
+*/
 
 } // namespace wsv
 

@@ -86,8 +86,7 @@ private:
      * @param location_config Location configuration
      * @return true if the file should be handled via CGI
      */
-    bool _isCgiRequest(const std::string& file_path,
-                       const LocationConfig& location_config) const;
+    // bool _isCgiRequest(const std::string& file_path, const LocationConfig& location_config) const;
 
     /**
      * Serve a static file
@@ -112,9 +111,9 @@ private:
      * @param location_config Location configuration
      * @return HttpResponse from CGI execution
      */
-    HttpResponse _execute_cgi(const HttpRequest& request,
-                              const std::string& file_path,
-                              const LocationConfig& location_config);
+    //HttpResponse _execute_cgi(const HttpRequest& request,
+    //                          const std::string& file_path,
+    //                          const LocationConfig& location_config);
 };
 
 } // namespace wsv
