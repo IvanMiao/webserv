@@ -162,13 +162,13 @@ void test_autoindex_enabled(TestRunner& runner)
 		std::string response = server.process_request(request, servers[0]);
 		
 		// Should return 200 with directory listing HTML
-		if (response.find("HTTP/1.1 200 OK") == std::string::npos) 
+		if (response.find("HTTP/1.1 200 OK") == std::string::npos)
 			throw std::runtime_error("Expected 200 OK response");
-		if (response.find("Index of") == std::string::npos) 
+		if (response.find("Index of") == std::string::npos)
 			throw std::runtime_error("Expected directory listing with 'Index of'");
-		if (response.find("404.html") == std::string::npos) 
+		if (response.find("404.html") == std::string::npos)
 			throw std::runtime_error("Expected 404.html in directory listing");
-		if (response.find("Content-Type: text/html") == std::string::npos) 
+		if (response.find("Content-Type: text/html") == std::string::npos)
 			throw std::runtime_error("Expected HTML content type");
 		
 		runner.pass();
@@ -186,7 +186,8 @@ void test_autoindex_disabled_uploads(TestRunner& runner)
 		TestServer server(parser);
 		
 		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
-		if (servers.empty()) throw std::runtime_error("No server config found");
+		if (servers.empty())
+			throw std::runtime_error("No server config found");
 		
 		// /uploads has autoindex off and no index file
 		std::string request_raw = "GET /uploads/ HTTP/1.1\r\nHost: localhost\r\n\r\n";

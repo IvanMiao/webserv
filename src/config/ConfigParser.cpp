@@ -10,7 +10,7 @@ namespace wsv
 // ==================== LocationConfig ====================
 LocationConfig::LocationConfig() 
 	: path("/") 
-	, root("/var/www/html") 
+	, root("") 
 	, index("index.html") 
 	, autoindex(false) 
 	, redirect_code(0) 
@@ -239,6 +239,9 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 		// End of location block
 		if (line == "}" || line == "};")
 		{
+			// If location doesn't have root, inherit from server
+			if (location.root.empty())
+				location.root = server.root;
 			server.locations.push_back(location);
 			return;
 		}
