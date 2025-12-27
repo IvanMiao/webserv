@@ -153,6 +153,9 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 			}
 			else  // just port
 				server.listen_port = std::atoi(value.c_str());
+			
+			if (server.listen_port <= 0 || server.listen_port > 65535)
+				throw std::runtime_error("Invalid port number: " + value);
 		}
 		// server_name localhost example.com;
 		else if (StringUtils::startsWith(line, "server_name"))
