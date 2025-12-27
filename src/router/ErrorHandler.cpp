@@ -23,12 +23,17 @@ HttpResponse ErrorHandler::get_error_page(int status_code, const ServerConfig& c
     // Serve custom error page if it exists
     if (it != config.error_pages.end())
     {
+        // Build full filesystem path: root + error_page_path
+        // Example: config.root = "./www", it->second = "/errors/404.html"
+        // Result: "./www/errors/404.html"
+        std::string error_page_path = config.root + it->second;
+        
         // Attempt to read custom error page file
-        body_content = FileHandler::read_file(it->second);
+        body_content = FileHandler::read_file(error_page_path);
         if (!body_content.empty())
         {
             response.setBody(body_content);
-            response.setHeader("Content-Type", FileHandler::get_mime_type(it->second));
+            response.setHeader("Content-Type", FileHandler::get_mime_type(error_page_path));
             return response;
         }
     }
