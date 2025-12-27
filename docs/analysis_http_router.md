@@ -1,4 +1,4 @@
-# HTTP & Router 模块分析与集成方案
+# HTTP & Router 模块架构
 
 本文档分析了 `src/http/` 和 `src/router/` 目录下各个类的作用，并提出了将这些模块集成到现有 `Server` 类的方案。
 
@@ -113,7 +113,7 @@
 graph TD
     A[Epoll Event: EPOLLIN] --> B[Server::_handle_client_data]
     B --> C[read socket]
-    C --> D[client._request.parse()]
+    C --> D[client.request.parse()]
     D --> E{isComplete?}
     E -- No --> F[Wait for more data]
     E -- Yes --> G[Server::_process_request]
@@ -137,11 +137,8 @@ graph TD
     Q --> R[Epoll Event: EPOLLOUT]
 ```
 
-## 3. 总结
+## 3. 设计优势
 
-现有的 `http` 和 `router` 模块设计清晰，职责分明。
-*   `HttpRequest` 解决了 TCP 粘包/拆包和协议解析问题。
-*   `RequestHandler` 封装了复杂的路由和配置匹配逻辑。
-*   `Server` 类只需要负责网络 IO (Epoll, Accept, Read, Write) 和调度，将具体的协议细节和业务逻辑委托给上述模块即可。
-
-集成后，`Server.cpp` 中的大量硬编码逻辑将被移除，代码将变得更加整洁且符合面向对象设计原则。
+*   **解耦**: `Server` 类仅负责网络 IO，协议解析和业务逻辑完全分离。
+*   **健壮性**: 状态机解析器能有效应对网络拥塞导致的分包问题。
+*   **可扩展性**: 增加新的处理逻辑（如 WebDAV）只需添加新的 Handler 并在 `RequestHandler` 中注册即可。
