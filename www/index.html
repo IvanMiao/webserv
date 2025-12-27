@@ -1,4 +1,103 @@
 <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv - Home</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/navbar.css">
+    <link rel="stylesheet" href="/css/responsive.css">
+    <link rel="icon" href="/images/favicon.ico" type="image/x-icon">
+</head>
+<div class="ribbon">🎀</div>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="/">Webserv</a>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="active">Home</a></li>
+                <li><a href="/about.html">About</a></li>
+                <li><a href="/contact.html">Contact</a></li>
+                <li><a href="/upload.html">Upload</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Welcome to Webserv</h1>
+            <p>A lightweight HTTP server implementation in C++</p>
+            <div class="hero-buttons">
+                <a href="/about.html" class="btn btn-img btn-learn">Learn More</a>
+                <a href="/contact.html" class="btn btn-img btn-start">Get Started</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <h2>Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>High Performance</h3>
+                    <p>Built with epoll for efficient I/O multiplexing</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📁</div>
+                    <h3>File Upload</h3>
+                    <p>Support for multipart/form-data file uploads</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>CGI Support</h3>
+                    <p>Execute Python and other CGI scripts</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Virtual Hosts</h3>
+                    <p>Multiple server names on one port</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section class="demo">
+        <div class="container">
+            <h2>Try it Out</h2>
+            <div class="demo-content">
+                <div class="demo-box">
+                    <h3>Static Files</h3>
+                    <p>Click the buttons to test different content types:</p>
+                    <button onclick="loadContent('/test.txt')" class="btn">Load Text</button>
+                    <button onclick="loadContent('/test.json')" class="btn">Load JSON</button>
+                    <button onclick="loadContent('/test.xml')" class="btn">Load XML</button>
+                    <div id="content-display" class="content-box"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Webserv Project. Built with ❤️ for 42 School</p>
+            <p>Server Status: <span id="server-status" class="status-online">Online</span></p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="/js/main.js"></script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
 <html>
 <head>
     <title>Test Server</title>
@@ -8,3 +107,4 @@
     <p>This is a test page.</p>
 </body>
 </html>
+ -->

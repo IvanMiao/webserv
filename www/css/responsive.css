@@ -1,0 +1,38 @@
+/* =========================================
+   Responsive Design
+   ========================================= */
+
+@media (max-width: 768px) {
+    .hero h1 {
+        font-size: 2rem;
+    }
+    .hero p {
+    font-size: 1rem;
+    }
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .upload-container,
+    .contact-container {
+        grid-template-columns: 1fr;
+    }
+
+    .nav-menu {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .navbar .container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+}

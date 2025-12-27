@@ -323,8 +323,8 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
     // 提取实际文件内容
     std::string content = body.substr(content_start, content_end - content_start);
     std::cerr << "Extracted content size: " << content.size() << " bytes" << std::endl;
-    std::cerr << "Content preview (first 100 chars): " << std::endl;
-    std::cerr << content.substr(0, std::min(size_t(100), content.size())) << std::endl;
+    //std::cerr << "Content preview (first 100 chars): " << std::endl;
+    //std::cerr << content.substr(0, std::min(size_t(100), content.size())) << std::endl;
     std::cerr << "===============================" << std::endl;
     
     return content;

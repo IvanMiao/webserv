@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Webserv</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/navbar.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="/">Webserv</a>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Home</a></li>
+                <li><a href="/about.html" class="active">About</a></li>
+                <li><a href="/contact.html">Contact</a></li>
+                <li><a href="/upload.html">Upload</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="content-section">
+        <div class="container">
+            <h1>About Webserv</h1>
+            
+            <div class="about-content">
+                <h2>What is Webserv?</h2>
+                <p>Webserv is a HTTP/1.1 server implementation written in C++98. It's designed to handle multiple simultaneous connections efficiently using epoll-based I/O multiplexing.</p>
+
+                <h2>Key Features</h2>
+                <ul class="feature-list">
+                    <li>✅ HTTP/1.1 Protocol Support</li>
+                    <li>✅ GET, POST, DELETE Methods</li>
+                    <li>✅ Static File Serving</li>
+                    <li>✅ CGI Script Execution</li>
+                    <li>✅ File Upload (multipart/form-data)</li>
+                    <li>✅ Virtual Host Support</li>
+                    <li>✅ Custom Error Pages</li>
+                    <li>✅ Directory Listing</li>
+                    <li>✅ Non-blocking I/O</li>
+                </ul>
+
+                <h2>Technical Details</h2>
+                <div class="tech-specs">
+                    <div class="spec-item">
+                        <strong>Language:</strong> C++98
+                    </div>
+                    <div class="spec-item">
+                        <strong>I/O Model:</strong> epoll (Linux)
+                    </div>
+                    <div class="spec-item">
+                        <strong>Protocol:</strong> HTTP/1.1
+                    </div>
+                    <div class="spec-item">
+                        <strong>Max Connections:</strong> 1024
+                    </div>
+                </div>
+
+                <h2>Architecture</h2>
+                <p>The server uses a modular design with separate handlers for:</p>
+                <ul>
+                    <li><strong>RequestHandler:</strong> Routes requests to appropriate handlers</li>
+                    <li><strong>FileHandler:</strong> Serves static files</li>
+                    <li><strong>UploadHandler:</strong> Processes file uploads</li>
+                    <li><strong>CgiHandler:</strong> Executes CGI scripts</li>
+                    <li><strong>ErrorHandler:</strong> Generates error pages</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Webserv Project</p>
+        </div>
+    </footer>
+</body>
+</html>
