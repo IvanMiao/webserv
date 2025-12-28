@@ -27,7 +27,19 @@ TEST_HTTP_RESPONSE_SRC	:= test/test_httpresponse.cpp \
 						   src/http/HttpResponse.cpp \
 						   src/utils/StringUtils.cpp
 
-TEST_EXECUTABLES := $(TEST_PARSER) $(TEST_SERVER) $(TEST_HTTP_REQUEST) $(TEST_HTTP_RESPONSE)
+TEST_REQUEST_HANDLER    := test_requesthandler
+TEST_REQUEST_HANDLER_SRC := test/test_requesthandler.cpp \
+                           src/config/ConfigParser.cpp \
+                           src/http/HttpRequest.cpp \
+                           src/http/HttpResponse.cpp \
+                           src/router/RequestHandler.cpp \
+                           src/router/FileHandler.cpp \
+                           src/router/UploadHandler.cpp \
+                           src/router/ErrorHandler.cpp \
+                           src/utils/Logger.cpp \
+                           src/utils/StringUtils.cpp
+
+TEST_EXECUTABLES := $(TEST_PARSER) $(TEST_SERVER) $(TEST_HTTP_REQUEST) $(TEST_HTTP_RESPONSE) $(TEST_REQUEST_HANDLER)
 
 # ----- Test Rules -----
 check: $(TEST_EXECUTABLES)
@@ -39,13 +51,18 @@ check: $(TEST_EXECUTABLES)
 	./$(TEST_HTTP_REQUEST)
 	@echo "\n----- Running HttpResponse tests... -----"
 	./$(TEST_HTTP_RESPONSE)
+	@echo "\n----- Running RequestHandler tests... -----"
+	./$(TEST_REQUEST_HANDLER)
 
 $(TEST_PARSER): $(TEST_PARSER_SRC)
 	$(CC) $(FLAG) $(INCLUDE) $(TEST_PARSER_SRC) -o $(TEST_PARSER)
 
 $(TEST_SERVER): $(TEST_SERVER_SRC)
-	$(CC) $(FLAG) $(INCLUDE) $(TEST_SERVER_SRC) -o $(TEST_SERVER)
+$(TEST_HTTP_REQUEST): $(TEST_HTTP_REQUEST_SRC)
+	$(CC) $(FLAG) $(INCLUDE) $(TEST_HTTP_REQUEST_SRC) -o $(TEST_HTTP_REQUEST)
 
+$(TEST_REQUEST_HANDLER): $(TEST_REQUEST_HANDLER_SRC)
+	$(CC) $(FLAG) $(INCLUDE) $(TEST_REQUEST_HANDLER_SRC) -o $(TEST_REQUEST_HANDLER)
 $(TEST_HTTP_REQUEST): $(TEST_HTTP_REQUEST_SRC)
 	$(CC) $(FLAG) $(INCLUDE) $(TEST_HTTP_REQUEST_SRC) -o $(TEST_HTTP_REQUEST)
 
