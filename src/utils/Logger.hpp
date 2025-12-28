@@ -45,8 +45,8 @@ public:
 	static void debug(const std::string &format, T1 a1, T2 a2);
 
 private:
-	static std::string getTimestamp();
-	static std::string formatMessage(const std::string &format, const std::string args[], size_t count);
+	static std::string _getTimestamp();
+	static std::string _formatMessage(const std::string &format, const std::string args[], size_t count);
 };
 
 
@@ -56,7 +56,7 @@ void Logger::info(const std::string &format, T1 a1)
 	std::ostringstream oss;
 	oss << a1;
 	std::string args[] = {oss.str()};
-	info(formatMessage(format, args, 1));
+	info(_formatMessage(format, args, 1));
 }
 
 template <typename T1, typename T2>
@@ -66,7 +66,7 @@ void Logger::info(const std::string &format, T1 a1, T2 a2)
 	oss1 << a1;
 	oss2 << a2;
 	std::string args[] = {oss1.str(), oss2.str()};
-	info(formatMessage(format, args, 2));
+	info(_formatMessage(format, args, 2));
 }
 
 template <typename T1, typename T2, typename T3>
@@ -86,7 +86,7 @@ void Logger::error(const std::string &format, T1 a1)
 	std::ostringstream oss;
 	oss << a1;
 	std::string args[] = {oss.str()};
-	error(formatMessage(format, args, 1));
+	error(_formatMessage(format, args, 1));
 }
 
 template <typename T1, typename T2>
@@ -96,7 +96,7 @@ void Logger::error(const std::string &format, T1 a1, T2 a2)
 	oss1 << a1;
 	oss2 << a2;
 	std::string args[] = {oss1.str(), oss2.str()};
-	info(formatMessage(format, args, 2));
+	error(_formatMessage(format, args, 2));
 }
 
 template <typename T1>
@@ -105,7 +105,7 @@ void Logger::debug(const std::string &format, T1 a1)
 	std::ostringstream oss;
 	oss << a1;
 	std::string args[] = {oss.str()};
-	debug(formatMessage(format, args, 1));
+	debug(_formatMessage(format, args, 1));
 }
 
 template <typename T1, typename T2>
@@ -115,7 +115,7 @@ void Logger::debug(const std::string &format, T1 a1, T2 a2)
 	oss1 << a1;
 	oss2 << a2;
 	std::string args[] = {oss1.str(), oss2.str()};
-	debug(formatMessage(format, args, 2));
+	debug(_formatMessage(format, args, 2));
 }
 
 

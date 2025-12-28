@@ -170,9 +170,7 @@ HttpResponse HttpResponse::createErrorResponse(int code,
     response.setStatus(code);
 
     // Use custom message if provided, otherwise use standard HTTP message
-    std::string msg = message.empty()
-                        ? getStatusMessage(code)
-                        : message;
+    std::string msg = message.empty() ? getStatusMessage(code) : message;
 
     // Build HTML error page
     std::ostringstream body;
