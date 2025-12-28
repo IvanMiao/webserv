@@ -1,7 +1,7 @@
 #include "CgiRequestHandler.hpp"
 #include "cgi/CgiHandler.hpp"
 #include "utils/StringUtils.hpp"
-#include <iostream>
+#include "utils/Logger.hpp"
 #include <sstream>
 
 namespace wsv
@@ -43,14 +43,14 @@ HttpResponse CgiRequestHandler::execute_cgi(const HttpRequest& request,
     }
     catch (const CgiHandler::Timeout& e)
     {
-        std::cerr << "CGI Timeout: " << e.what() << std::endl;
+        Logger::error("CGI Timeout: " + std::string(e.what()));
         HttpResponse response;
         response.setStatus(504);  // Gateway Timeout
         return response;
     }
     catch (const std::runtime_error& e)
     {
-        std::cerr << "CGI Error: " << e.what() << std::endl;
+        Logger::error("CGI Error: " + std::string(e.what()));
         HttpResponse response;
         response.setStatus(500);  // Internal Server Error
         return response;

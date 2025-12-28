@@ -1,10 +1,10 @@
 #include "UploadHandler.hpp"
 #include "FileHandler.hpp"
 #include "utils/StringUtils.hpp"
+#include "utils/Logger.hpp"
 #include <sys/stat.h>
 #include <fstream>
 #include <ctime>
-#include <iostream>
 
 namespace wsv {
 
@@ -17,24 +17,24 @@ HttpResponse UploadHandler::handle_upload(const HttpRequest& request,
     // Step 1: Validate upload directory
     HttpResponse dir_validation = _validate_upload_directory(config.upload_path);
     if (dir_validation.getStatus() != 200) {
-        std::cerr << "[DEBUG UPLOAD] Directory validation failed with status: " << dir_validation.getStatus() << std::endl;
+        Logger::debug("Directory validation failed with status: " + StringUtils::toString(dir_validation.getStatus()));
         return dir_validation;
     }
     
     // Step 2: Extract filename (raw, unsanitized)
     std::string raw_filename = _extract_filename(request);
-    std::cerr << "[DEBUG UPLOAD] Extracted raw filename: '" << raw_filename << "'" << std::endl;
+    Logger::debug("Extracted raw filename: '" + raw_filename + "'");
     
     // Step 3: Validate filename for security issues BEFORE sanitizing
     HttpResponse filename_validation = _validate_filename(raw_filename);
     if (filename_validation.getStatus() != 200) {
-        std::cerr << "[DEBUG UPLOAD] Filename validation failed for: '" << raw_filename << "'" << std::endl;
+        Logger::debug("Filename validation failed for: '" + raw_filename + "'");
         return filename_validation;
     }
     
     // Step 4: Sanitize filename (remove path components)
     std::string filename = _sanitize_filename(raw_filename);
-    std::cerr << "[DEBUG UPLOAD] Sanitized filename: '" << filename << "'" << std::endl;
+    Logger::debug("Sanitized filename: '" + filename + "'");
     
     // Step 5: Build save path
     std::string save_path = config.upload_path;
@@ -60,17 +60,17 @@ HttpResponse UploadHandler::handle_upload(const HttpRequest& request,
  */
 HttpResponse UploadHandler::_validate_upload_directory(const std::string& upload_path)
 {
-    std::cerr << "[DEBUG UPLOAD] Validating upload directory: '" << upload_path << "'" << std::endl;
+    Logger::debug("Validating upload directory: '" + upload_path + "'");
     if (!_ensure_directory_exists(upload_path))
     {
-        std::cerr << "[DEBUG UPLOAD] Directory validation failed for: '" << upload_path << "'" << std::endl;
+        Logger::debug("Directory validation failed for: '" + upload_path + "'");
         HttpResponse response;
         response.setStatus(500);
         response.setBody("{\"error\": \"Failed to create upload directory\"}");
         response.setHeader("Content-Type", "application/json");
         return response;
     }
-    std::cerr << "[DEBUG UPLOAD] Directory validation passed" << std::endl;
+    Logger::debug("Directory validation passed");
     
     HttpResponse response;
     response.setStatus(200);  // Explicitly set success status
@@ -109,7 +109,7 @@ std::string UploadHandler::_extract_filename(const HttpRequest& request)
     // In multipart/form-data, Content-Disposition is in the body, not in headers
     // We need to extract it from the body
     std::string body = request.getBody();
-    std::cerr << "[DEBUG UPLOAD] Body size: " << body.length() << std::endl;
+    Logger::debug("Body size: " + StringUtils::toString(body.length()));
     
     // Look for Content-Disposition in the body
     size_t pos = body.find("Content-Disposition:");
@@ -123,25 +123,25 @@ std::string UploadHandler::_extract_filename(const HttpRequest& request)
         if (end != std::string::npos)
         {
             std::string disposition_line = body.substr(pos, end - pos);
-            std::cerr << "[DEBUG UPLOAD] Found Content-Disposition in body: '" << disposition_line << "'" << std::endl;
+            Logger::debug("Found Content-Disposition in body: '" + disposition_line + "'");
             filename = _extract_multipart_filename(disposition_line);
             
             if (!filename.empty())
             {
-                std::cerr << "[DEBUG UPLOAD] Successfully extracted filename: '" << filename << "'" << std::endl;
+                Logger::debug("Successfully extracted filename: '" + filename + "'");
                 return filename;  // Return WITHOUT sanitizing - let caller validate first
             }
         }
     }
     else
     {
-        std::cerr << "[DEBUG UPLOAD] Content-Disposition not found in body" << std::endl;
+        Logger::debug("Content-Disposition not found in body");
     }
     
     // Only generate default if we couldn't extract a filename
-    std::cerr << "[DEBUG UPLOAD] Generating default filename" << std::endl;
+    Logger::debug("Generating default filename");
     filename = _generate_default_filename();
-    std::cerr << "[DEBUG UPLOAD] Final filename before return: '" << filename << "'" << std::endl;
+    Logger::debug("Final filename before return: '" + filename + "'");
     return filename;  // Return WITHOUT sanitizing
 }
 
@@ -153,7 +153,7 @@ std::string UploadHandler::_extract_multipart_filename(const std::string& conten
     size_t pos = content_disposition.find("filename=");
     if (pos == std::string::npos)
     {
-        std::cerr << "[DEBUG UPLOAD] No filename= found in: '" << content_disposition << "'" << std::endl;
+        Logger::debug("No filename= found in: '" + content_disposition + "'");
         return "";
     }
     
@@ -187,7 +187,7 @@ std::string UploadHandler::_extract_multipart_filename(const std::string& conten
     }
     
     std::string filename = content_disposition.substr(pos, end_pos - pos);
-    std::cerr << "[DEBUG UPLOAD] Extracted filename from disposition: '" << filename << "'" << std::endl;
+    Logger::debug("Extracted filename from disposition: '" + filename + "'");
     return filename;
 }
 
@@ -256,9 +256,9 @@ std::string UploadHandler::_extract_boundary(const std::string& content_type)
 std::string UploadHandler::_extract_multipart_content(const std::string& body,
                                                       const std::string& boundary)
 {
-    std::cerr << "=== extractMultipartContent ===" << std::endl;
-    std::cerr << "Boundary: " << boundary << std::endl;
-    std::cerr << "Body size: " << body.size() << " bytes" << std::endl;
+    Logger::debug("=== extractMultipartContent ===");
+    Logger::debug("Boundary: " + boundary);
+    Logger::debug("Body size: " + StringUtils::toString(body.size()) + " bytes");
     
     // 查找 Content-Type 或 Content-Transfer-Encoding 之后的空行
     // 这是文件内容开始的位置
@@ -276,7 +276,7 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
         }
         else
         {
-            std::cerr << "Warning: Could not find content separator" << std::endl;
+            Logger::warning("Could not find content separator");
             return body;  // 找不到分隔符，返回原始 body
         }
     }
@@ -285,7 +285,7 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
         content_start += 4;  // 跳过 \r\n\r\n
     }
     
-    std::cerr << "Content starts at position: " << content_start << std::endl;
+    Logger::debug("Content starts at position: " + StringUtils::toString(content_start));
     
     // 查找结束边界: \r\n--boundary 或 \n--boundary
     std::string end_boundary1 = "\r\n--" + boundary;
@@ -298,7 +298,7 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
         content_end = body.find(end_boundary2, content_start);
         if (content_end == std::string::npos)
         {
-            std::cerr << "Warning: Could not find end boundary" << std::endl;
+            Logger::warning("Could not find end boundary");
             // 尝试找到最后的边界标记
             std::string final_boundary = "--" + boundary + "--";
             content_end = body.find(final_boundary, content_start);
@@ -318,14 +318,14 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
         }
     }
     
-    std::cerr << "Content ends at position: " << content_end << std::endl;
+    Logger::debug("Content ends at position: " + StringUtils::toString(content_end));
     
     // 提取实际文件内容
     std::string content = body.substr(content_start, content_end - content_start);
-    std::cerr << "Extracted content size: " << content.size() << " bytes" << std::endl;
-    std::cerr << "Content preview (first 100 chars): " << std::endl;
-    std::cerr << content.substr(0, std::min(size_t(100), content.size())) << std::endl;
-    std::cerr << "===============================" << std::endl;
+    Logger::debug("Extracted content size: " + StringUtils::toString(content.size()) + " bytes");
+    Logger::debug("Content preview (first 100 chars): ");
+    Logger::debug(content.substr(0, std::min(size_t(100), content.size())));
+    Logger::debug("===============================");
     
     return content;
 }
@@ -379,7 +379,7 @@ bool UploadHandler::_ensure_directory_exists(const std::string& dir_path)
     if (mkdir(dir_path.c_str(), 0755) == 0)
         return true;
     
-    std::cerr << "Failed to create directory: " << dir_path << std::endl;
+    Logger::error("Failed to create directory: " + dir_path);
     return false;
 }
 

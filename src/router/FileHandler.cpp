@@ -121,7 +121,7 @@ std::string FileHandler::read_file(const std::string& path)
         return "";
     
     std::ostringstream buffer;
-    buffer << file.rdbuf();  // Read entire file at once
+    buffer << file.rdbuf();  // [TODO] Read entire file at once?
     return buffer.str();
 }
 
