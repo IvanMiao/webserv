@@ -77,7 +77,7 @@ void Logger::info(const std::string &format, T1 a1, T2 a2, T3 a3)
 	oss2 << a2;
 	oss3 << a3;
 	std::string args[] = {oss1.str(), oss2.str(), oss3.str()};
-	info(formatMessage(format, args, 3));
+	info(_formatMessage(format, args, 3));
 }
 
 template <typename T1>

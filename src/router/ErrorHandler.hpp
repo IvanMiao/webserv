@@ -22,14 +22,6 @@ public:
      */
     static HttpResponse get_error_page(int status_code, const ServerConfig& config);
 
-private:
-    /**
-     * Generate a default HTML error page
-     * Used if no custom page is configured or file cannot be read
-     * @param status_code HTTP status code
-     * @return HTML content as string
-     */
-    static std::string _generate_default_error_page(int status_code);
 };
 
 } // namespace wsv
