@@ -262,7 +262,6 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
     
     // Find the empty line after Content-Type or Content-Transfer-Encoding
     // This marks where the file content begins
-    
     // Method: Find "\r\n\r\n", which marks the end of headers and start of content
     size_t content_start = body.find("\r\n\r\n");
     
@@ -308,9 +307,9 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
     // Extract actual file content
     std::string content = body.substr(content_start, content_end - content_start);
     Logger::debug("Extracted content size: " + StringUtils::toString(content.size()) + " bytes");
-    Logger::debug("Content preview (first 100 chars): ");
-    Logger::debug(content.substr(0, std::min(size_t(100), content.size())));
-    Logger::debug("===============================");
+    // Logger::debug("Content preview (first 100 chars): ");
+    // Logger::debug(content.substr(0, std::min(size_t(100), content.size())));
+    // Logger::debug("===============================");
     
     return content;
 }
@@ -332,7 +331,31 @@ HttpResponse UploadHandler::_save_file(const std::string& file_path,
     }
     
     output.write(content.c_str(), content.size());
+    
+    // Check if write operation succeeded
+    if (output.fail())
+    {
+        output.close();
+        Logger::error("Failed to write file (possibly disk full): " + file_path);
+        HttpResponse response;
+        response.setStatus(507);  // 507 Insufficient Storage
+        response.setBody("{\"error\": \"Insufficient storage space\"}");
+        response.setHeader("Content-Type", "application/json");
+        return response;
+    }
+    
     output.close();
+    
+    // Check if close operation succeeded (flushes buffers)
+    if (output.fail())
+    {
+        Logger::error("Failed to close file (possibly disk full): " + file_path);
+        HttpResponse response;
+        response.setStatus(507);  // 507 Insufficient Storage
+        response.setBody("{\"error\": \"Insufficient storage space\"}");
+        response.setHeader("Content-Type", "application/json");
+        return response;
+    }
     
     HttpResponse response;
     response.setStatus(200);  // Success

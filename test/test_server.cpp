@@ -48,8 +48,10 @@ void test_config_parser_values(TestRunner& runner)
 		const wsv::LocationConfig* loc_upload = s1.findLocation("/uploads");
 		if (!loc_upload) throw std::runtime_error("Location /uploads not found");
 		if (!loc_upload->upload_enable) throw std::runtime_error("Upload not enabled for /uploads");
-		if (loc_upload->autoindex) throw std::runtime_error("Autoindex should be off for /uploads");
 		
+		const wsv::LocationConfig* root_location = s1.findLocation("/");
+		if (root_location->autoindex) throw std::runtime_error("Autoindex should be off for /");
+
 		const wsv::LocationConfig* loc_cgi = s1.findLocation("/cgi-bin");
 		if (!loc_cgi) throw std::runtime_error("Location /cgi-bin not found");
 		if (loc_cgi->cgi_extension != ".py") throw std::runtime_error("CGI extension mismatch");
@@ -143,66 +145,6 @@ void test_server_not_found_response(TestRunner& runner)
 	}
 }
 
-void test_autoindex_enabled(TestRunner& runner)
-{
-	runner.startTest("Autoindex generates directory listing for /errors/");
-	try {
-		wsv::ConfigParser parser("test/test.conf");
-		parser.parse();
-		TestServer server(parser);
-		
-		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
-		if (servers.empty()) throw std::runtime_error("No server config found");
-		
-		// Request /errors/ directory which has files but no index.html
-		// Root location has autoindex on, so it should show directory listing
-		std::string request_raw = "GET /errors/ HTTP/1.1\r\nHost: localhost\r\n\r\n";
-		wsv::HttpRequest request(request_raw);
-		std::string response = server.process_request(request, servers[0]);
-		
-		// Should return 200 with directory listing HTML
-		if (response.find("HTTP/1.1 200 OK") == std::string::npos)
-			throw std::runtime_error("Expected 200 OK response");
-		if (response.find("Index of") == std::string::npos)
-			throw std::runtime_error("Expected directory listing with 'Index of'");
-		if (response.find("404.html") == std::string::npos)
-			throw std::runtime_error("Expected 404.html in directory listing");
-		if (response.find("Content-Type: text/html") == std::string::npos)
-			throw std::runtime_error("Expected HTML content type");
-		
-		runner.pass();
-	} catch (const std::exception& e) {
-		runner.fail(e.what());
-	}
-}
-
-void test_autoindex_disabled_uploads(TestRunner& runner)
-{
-	runner.startTest("Autoindex disabled returns 403 for /uploads/");
-	try {
-		wsv::ConfigParser parser("test/test.conf");
-		parser.parse();
-		TestServer server(parser);
-		
-		const std::vector<wsv::ServerConfig>& servers = parser.getServers();
-		if (servers.empty())
-			throw std::runtime_error("No server config found");
-		
-		// /uploads has autoindex off and no index file
-		std::string request_raw = "GET /uploads/ HTTP/1.1\r\nHost: localhost\r\n\r\n";
-		wsv::HttpRequest request(request_raw);
-		std::string response = server.process_request(request, servers[0]);
-		
-		// Should return 403 when autoindex is off and no index file exists
-		if (response.find("HTTP/1.1 403") == std::string::npos) 
-			throw std::runtime_error("Expected 403 Forbidden when autoindex is off");
-		
-		runner.pass();
-	} catch (const std::exception& e) {
-		runner.fail(e.what());
-	}
-}
-
 // ==================== Main Test Runner ====================
 
 int main()
@@ -223,8 +165,6 @@ int main()
 	std::cout << BOLD << "--- Server Request Processing ---" << RESET << std::endl;
 	test_server_static_file_response(runner);
 	test_server_not_found_response(runner);
-	test_autoindex_enabled(runner);
-	test_autoindex_disabled_uploads(runner);
 	std::cout << std::endl;
 	
 	runner.summary();

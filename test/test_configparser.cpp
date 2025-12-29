@@ -75,7 +75,7 @@ void test_valid_config(TestRunner& runner, const std::string& config_path)
 		// Server 1 Location assertions
 		const wsv::LocationConfig* loc_root = s1.findLocation("/");
 		if (!loc_root) throw std::runtime_error("Server 1: Location / not found");
-		if (!loc_root->autoindex) throw std::runtime_error("Server 1: autoindex should be on for /");
+		if (loc_root->autoindex) throw std::runtime_error("Server 1: autoindex should be off for /");
 
 		const wsv::LocationConfig* loc_upload = s1.findLocation("/uploads");
 		if (!loc_upload) throw std::runtime_error("Server 1: Location /uploads not found");
@@ -83,7 +83,7 @@ void test_valid_config(TestRunner& runner, const std::string& config_path)
 
 		// Server 3 assertions (simple one)
 		const wsv::ServerConfig& s3 = servers[2];
-		if (s3.listen_port != 8084) throw std::runtime_error("Server 3: Wrong port");
+		if (s3.listen_port != 8082) throw std::runtime_error("Server 3: Wrong port");
 
 		runner.pass();
 

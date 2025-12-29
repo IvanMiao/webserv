@@ -41,7 +41,7 @@ CRLF
 ## 3. 关键特性实现
 
 ### 3.1 Host 头部处理
-根据 RFC 7230，HTTP/1.1 请求必须包含 `Host` 头部。本项目利用不实现**虚拟主机 (Virtual Hosting)**(同一个 IP 和端口可以根据不同的域名分发到不同的 `ServerConfig`)，本项目的同一个IP:port只对应一个ServerConfig。
+根据 RFC 7230，HTTP/1.1 请求必须包含 `Host` 头部。本项目不实现**虚拟主机 (Virtual Hosting)**(同一个 IP 和端口可以根据不同的域名分发到不同的 `ServerConfig`)，本项目的同一个IP:port只对应一个ServerConfig。
 
 ### 3.2 Connection: keep-alive
 支持长连接。如果请求头包含 `Connection: keep-alive`（或 HTTP/1.1 默认），服务器在发送完响应后不会立即关闭连接，而是重置 `HttpRequest` 对象，等待下一个请求。

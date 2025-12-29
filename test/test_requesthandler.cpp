@@ -585,6 +585,71 @@ void test_special_characters_in_filename(TestRunner& runner) {
 	}
 }
 
+void test_upload_disk_full(TestRunner& runner) {
+	runner.startTest("Upload when disk is full returns 507");
+	try {
+		ServerConfig config = create_basic_config();
+		// Use a special upload path on a full disk simulation
+		// We'll create a directory with no write permissions to simulate disk full
+		config.locations[1].upload_path = "test/www_test/uploads/readonly_test";
+		
+		// Create the directory
+		system("mkdir -p test/www_test/uploads/readonly_test 2>/dev/null");
+		
+		RequestHandler handler(config);
+		
+		std::string boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+		std::string body = 
+			"--" + boundary + "\r\n"
+			"Content-Disposition: form-data; name=\"file\"; filename=\"diskfull_test.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"This upload should fail due to disk space\r\n"
+			"--" + boundary + "--\r\n";
+			
+		std::string raw_req = 
+			"POST /uploads HTTP/1.1\r\n"
+			"Host: localhost\r\n"
+			"Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
+			"Content-Length: " + StringUtils::toString(body.length()) + "\r\n"
+			"\r\n" + body;
+
+		// Make directory read-only to simulate disk full/write failure
+		system("chmod 555 test/www_test/uploads/readonly_test");
+		
+		HttpRequest request(raw_req);
+		HttpResponse response = handler.handleRequest(request);
+		
+		// Restore permissions before checking result
+		system("chmod 755 test/www_test/uploads/readonly_test");
+		system("rm -rf test/www_test/uploads/readonly_test");
+		
+		// When disk is full or write fails, should return 507 (Insufficient Storage) or 500
+		if (response.getStatus() != 507 && response.getStatus() != 500) {
+			throw std::runtime_error("Expected 507 or 500 for disk full, got " + 
+			                        StringUtils::toString(response.getStatus()));
+		}
+		
+		// Verify error message contains storage-related information
+		std::string body_content = response.getBody();
+		bool has_error_msg = (body_content.find("storage") != std::string::npos || 
+		                     body_content.find("Storage") != std::string::npos ||
+		                     body_content.find("save") != std::string::npos ||
+		                     body_content.find("error") != std::string::npos);
+		
+		if (!has_error_msg) {
+			throw std::runtime_error("Error response should contain storage/save error message");
+		}
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		// Cleanup in case of failure
+		system("chmod 755 test/www_test/uploads/readonly_test 2>/dev/null");
+		system("rm -rf test/www_test/uploads/readonly_test 2>/dev/null");
+		runner.fail(e.what());
+	}
+}
+
 int main() {
 	std::cout << BOLD << "========================================" << RESET << std::endl;
 	std::cout << BOLD << "  RequestHandler Unit Tests" << RESET << std::endl;
@@ -617,6 +682,7 @@ int main() {
 	test_zero_content_length(runner);
 	test_body_exactly_at_limit(runner);
 	test_special_characters_in_filename(runner);
+	test_upload_disk_full(runner);
 
 	runner.summary();
 	return runner.allPassed() ? 0 : 1;

@@ -272,8 +272,9 @@ void Server::_handle_client_data(int client_fd)
 		// HTTP end detection
 		if (client.request.isComplete())
 		{
-			Logger::info("----- Full Request from client FD {} -----\n{}",
-						client_fd, client.request_buffer);
+			Logger::info("----- Full Request from client FD {} -----", client_fd);
+			// Logger::debug("----- Request Content from client FD {} -----\n{}",
+			//			client_fd, client.request_buffer[:100]);
 			
 			// 1. Handle request, generate response 
 			std::string response = _process_request(client_fd, client.request);
@@ -323,7 +324,7 @@ void Server::_handle_client_write(int client_fd)
 
 	if (buffer.empty())
 	{
-		Logger::info("Response sent fully to FD {}", client_fd);
+		Logger::info("##### Response sent fully to FD {} #####", client_fd);
 
 		// [TODO]: short-connection or Kepp-Alive
 		// _modify_epoll(client_fd, EPOLLIN);
