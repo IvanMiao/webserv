@@ -104,45 +104,57 @@ HttpResponse UploadHandler::_validate_filename(const std::string& filename)
  */
 std::string UploadHandler::_extract_filename(const HttpRequest& request)
 {
-    std::string filename;
-    
-    // In multipart/form-data, Content-Disposition is in the body, not in headers
-    // We need to extract it from the body
     std::string body = request.getBody();
-    Logger::debug("Body size: " + StringUtils::toString(body.length()));
-    
-    // Look for Content-Disposition in the body
-    size_t pos = body.find("Content-Disposition:");
-    if (pos != std::string::npos)
+    std::string content_type = request.hasHeader("Content-Type") ? request.getHeader("Content-Type") : "";
+    std::string boundary = _extract_boundary(content_type);
+
+    if (boundary.empty())
     {
-        // Find the end of this line
-        size_t end = body.find("\r\n", pos);
-        if (end == std::string::npos)
-            end = body.find("\n", pos);
-        
-        if (end != std::string::npos)
+        // Fallback to old behavior if not multipart
+        size_t pos = body.find("Content-Disposition:");
+        if (pos != std::string::npos)
         {
-            std::string disposition_line = body.substr(pos, end - pos);
-            Logger::debug("Found Content-Disposition in body: '" + disposition_line + "'");
-            filename = _extract_multipart_filename(disposition_line);
-            
-            if (!filename.empty())
+            size_t end = body.find("\r\n", pos);
+            if (end == std::string::npos) end = body.find("\n", pos);
+            if (end != std::string::npos)
             {
-                Logger::debug("Successfully extracted filename: '" + filename + "'");
-                return filename;  // Return WITHOUT sanitizing - let caller validate first
+                std::string filename = _extract_multipart_filename(body.substr(pos, end - pos));
+                if (!filename.empty()) return filename;
             }
         }
+        return _generate_default_filename();
     }
-    else
+
+    std::string part_boundary = "--" + boundary;
+    size_t pos = body.find(part_boundary);
+
+    while (pos != std::string::npos)
     {
-        Logger::debug("Content-Disposition not found in body");
+        size_t next_pos = body.find(part_boundary, pos + part_boundary.length());
+        std::string part = body.substr(pos, next_pos - pos);
+
+        size_t disp_pos = part.find("Content-Disposition:");
+        if (disp_pos != std::string::npos)
+        {
+            size_t end = part.find("\r\n", disp_pos);
+            if (end == std::string::npos) end = part.find("\n", disp_pos);
+            if (end != std::string::npos)
+            {
+                std::string filename = _extract_multipart_filename(part.substr(disp_pos, end - disp_pos));
+                if (!filename.empty())
+                {
+                    Logger::debug("Successfully extracted filename from part: '" + filename + "'");
+                    return filename;
+                }
+            }
+        }
+        pos = next_pos;
+        if (pos != std::string::npos && pos + part_boundary.length() + 2 <= body.length() && 
+            body.substr(pos + part_boundary.length(), 2) == "--")
+            break; // End boundary
     }
-    
-    // Only generate default if we couldn't extract a filename
-    Logger::debug("Generating default filename");
-    filename = _generate_default_filename();
-    Logger::debug("Final filename before return: '" + filename + "'");
-    return filename;  // Return WITHOUT sanitizing
+
+    return _generate_default_filename();
 }
 
 /**
@@ -260,58 +272,51 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
     Logger::debug("Boundary: " + boundary);
     Logger::debug("Body size: " + StringUtils::toString(body.size()) + " bytes");
     
-    // Find the empty line after Content-Type or Content-Transfer-Encoding
-    // This marks where the file content begins
-    // Method: Find "\r\n\r\n", which marks the end of headers and start of content
-    size_t content_start = body.find("\r\n\r\n");
-    
-    if (content_start == std::string::npos)
+    std::string part_boundary = "--" + boundary;
+    size_t pos = body.find(part_boundary);
+
+    while (pos != std::string::npos)
     {
-        Logger::warning("Could not find content separator (\\r\\n\\r\\n)");
-        return "";  // Strictly follow HTTP specification
-    }
-    
-    content_start += 4;  // Skip \r\n\r\n
-    
-    Logger::debug("Content starts at position: " + StringUtils::toString(content_start));
-    
-    // Find end boundary: "\r\n--"boundary
-    std::string end_boundary = "\r\n--" + boundary;
-    
-    size_t content_end = body.find(end_boundary, content_start);
-    
-    if (content_end == std::string::npos)
-    {
-        Logger::warning("Could not find end boundary");
-        // Try to find the final boundary marker
-        std::string final_boundary = "--" + boundary + "--";
-        content_end = body.find(final_boundary, content_start);
-        if (content_end != std::string::npos)
+        size_t next_pos = body.find(part_boundary, pos + part_boundary.length());
+        
+        // Headers of this part end at \r\n\r\n
+        size_t header_end = body.find("\r\n\r\n", pos);
+        if (header_end != std::string::npos && (next_pos == std::string::npos || header_end < next_pos))
         {
-            // Backtrack to remove trailing newlines
-            while (content_end > content_start && 
-                   (body[content_end-1] == '\r' || body[content_end-1] == '\n'))
+            // Check if this part has a filename
+            std::string headers = body.substr(pos, header_end - pos);
+            if (headers.find("Content-Disposition:") != std::string::npos && 
+                headers.find("filename=") != std::string::npos)
             {
-                content_end--;
+                size_t content_start = header_end + 4;
+                size_t content_end = next_pos;
+                
+                if (content_end == std::string::npos)
+                {
+                    // Should not happen in valid multipart, but handle it
+                    content_end = body.length();
+                }
+
+                // Backtrack to remove \r\n before the boundary
+                if (content_end >= 2 && body[content_end - 2] == '\r' && body[content_end - 1] == '\n')
+                    content_end -= 2;
+                else if (content_end >= 1 && body[content_end - 1] == '\n')
+                    content_end -= 1;
+
+                Logger::debug("Found file part. Content starts at " + StringUtils::toString(content_start) + 
+                             ", ends at " + StringUtils::toString(content_end));
+                return body.substr(content_start, content_end - content_start);
             }
         }
-        else
-        {
-            Logger::error("Invalid multipart format: no end boundary found");
-            return "";
-        }
+
+        pos = next_pos;
+        if (pos != std::string::npos && pos + part_boundary.length() + 2 <= body.length() && 
+            body.substr(pos + part_boundary.length(), 2) == "--")
+            break; // End boundary
     }
-    
-    Logger::debug("Content ends at position: " + StringUtils::toString(content_end));
-    
-    // Extract actual file content
-    std::string content = body.substr(content_start, content_end - content_start);
-    Logger::debug("Extracted content size: " + StringUtils::toString(content.size()) + " bytes");
-    // Logger::debug("Content preview (first 100 chars): ");
-    // Logger::debug(content.substr(0, std::min(size_t(100), content.size())));
-    // Logger::debug("===============================");
-    
-    return content;
+
+    Logger::warning("Could not find a part with filename in multipart body");
+    return "";
 }
 
 /**

@@ -650,6 +650,61 @@ void test_upload_disk_full(TestRunner& runner) {
 	}
 }
 
+void test_multipart_with_multiple_parts(TestRunner& runner) {
+	runner.startTest("POST multipart with multiple parts");
+	try {
+		ServerConfig config = create_basic_config();
+		RequestHandler handler(config);
+		
+		std::string boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+		// Part 1 is a regular form field (no filename)
+		// Part 2 is the file upload
+		std::string body = 
+			"--" + boundary + "\r\n"
+			"Content-Disposition: form-data; name=\"field1\"\r\n"
+			"\r\n"
+			"some_value\r\n"
+			"--" + boundary + "\r\n"
+			"Content-Disposition: form-data; name=\"file\"; filename=\"bug_test.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"Correct File Content\r\n"
+			"--" + boundary + "--\r\n";
+			
+		std::string raw_req = 
+			"POST /uploads/bug_test.txt HTTP/1.1\r\n"
+			"Host: localhost\r\n"
+			"Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
+			"Content-Length: " + StringUtils::toString(body.length()) + "\r\n"
+			"\r\n" + body;
+
+		HttpRequest request(raw_req);
+		HttpResponse response = handler.handleRequest(request);
+		
+		if (response.getStatus() != 200 && response.getStatus() != 201) 
+			throw std::runtime_error("Expected 200/201, got " + StringUtils::toString(response.getStatus()));
+
+		std::ifstream f("test/www_test/uploads/bug_test.txt");
+		if (!f.good())
+			throw std::runtime_error("Uploaded file not found on disk");
+		
+		std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+		f.close();
+		
+		if (content == "some_value") {
+			throw std::runtime_error("BUG: Extracted 'some_value' instead of 'Correct File Content' because it found the first \\r\\n\\r\\n");
+		}
+		
+		if (content != "Correct File Content") {
+			throw std::runtime_error("Content mismatch! Expected 'Correct File Content', but got '" + content + "'");
+		}
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
 int main() {
 	std::cout << BOLD << "========================================" << RESET << std::endl;
 	std::cout << BOLD << "  RequestHandler Unit Tests" << RESET << std::endl;
@@ -667,7 +722,7 @@ int main() {
 	test_file_upload(runner);
 	test_delete_file(runner);
 	test_max_body_size(runner);
-	
+
 	// Additional edge case tests
 	test_autoindex_directory(runner);
 	test_directory_no_autoindex(runner);
@@ -683,6 +738,7 @@ int main() {
 	test_body_exactly_at_limit(runner);
 	test_special_characters_in_filename(runner);
 	test_upload_disk_full(runner);
+	test_multipart_with_multiple_parts(runner);
 
 	runner.summary();
 	return runner.allPassed() ? 0 : 1;
