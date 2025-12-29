@@ -285,6 +285,9 @@ void test_autoindex_directory(TestRunner& runner) {
 void test_directory_no_autoindex(TestRunner& runner) {
 	runner.startTest("GET directory without index and autoindex disabled returns 403");
 	try {
+		// Ensure the protected directory exists for testing
+		mkdir("test/www_test/protected", 0755);
+		
 		ServerConfig config = create_basic_config();
 		// Add a location without index file and autoindex disabled
 		LocationConfig loc_protected;
