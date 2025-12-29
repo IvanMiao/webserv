@@ -2,8 +2,6 @@
 #include "config/ConfigParser.hpp"
 #include "utils/Logger.hpp"
 
-#include <iostream>
-
 int	main( int argc, char** argv )
 {
 	std::string config_path = "config/default.conf";

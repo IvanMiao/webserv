@@ -9,7 +9,6 @@ namespace wsv
 // ============================================================================
 // Initializes the response with a 200 status code, HTTP/1.1 version,
 // and sets default headers (Server, Date, Connection).
-
 HttpResponse::HttpResponse()
     : _status_code(200),
       _version("HTTP/1.1")
@@ -52,14 +51,14 @@ void HttpResponse::setStatus(int code)
 }
 
 
-// setHeader - Adds or updates an HTTP header
+// ## setHeader - Adds or updates an HTTP header
 // If the header key already exists, it will be overwritten.
 void HttpResponse::setHeader(const std::string& key, const std::string& value)
 {
     this->_headers[key] = value;
 }
 
-// setBody - Sets the response body and updates Content-Length
+// ## setBody - Sets the response body and updates Content-Length
 // Automatically sets the Content-Length header based on the body size.
 void HttpResponse::setBody(const std::string& body)
 {
@@ -67,7 +66,7 @@ void HttpResponse::setBody(const std::string& body)
     this->setContentLength(this->_body.size());
 }
 
-// appendBody - Appends data to the existing body
+// ## appendBody - Appends data to the existing body
 // Updates Content-Length header after appending.
 void HttpResponse::appendBody(const std::string& data)
 {
@@ -75,21 +74,14 @@ void HttpResponse::appendBody(const std::string& data)
     this->setContentLength(this->_body.size());
 }
 
-// ============================================================================
 // setContentType - Sets the Content-Type header
-// ============================================================================
-
 void HttpResponse::setContentType(const std::string& type)
 {
     this->setHeader("Content-Type", type);
 }
 
-// ============================================================================
-// setContentLength - Sets the Content-Length header
-// ============================================================================
+// ## setContentLength - Sets the Content-Length header
 // Converts the size_t length to string format for HTTP header.
-// ============================================================================
-
 void HttpResponse::setContentLength(size_t length)
 {
     std::ostringstream oss;
@@ -97,13 +89,9 @@ void HttpResponse::setContentLength(size_t length)
     this->setHeader("Content-Length", oss.str());
 }
 
-// ============================================================================
-// _setDefaultHeaders - Initializes default HTTP response headers
-// ============================================================================
+// ## _setDefaultHeaders - Initializes default HTTP response headers
 // Sets Server, Date, and Connection headers.
 // Date is formatted according to RFC 2822 HTTP date format.
-// ============================================================================
-
 void HttpResponse::_setDefaultHeaders()
 {
     // Set Server identification header
@@ -122,13 +110,10 @@ void HttpResponse::_setDefaultHeaders()
     this->setHeader("Connection", "close");
 }
 
-// ============================================================================
-// serialize - Generates the complete HTTP response string
-// ============================================================================
+
+// ## serialize - Generates the complete HTTP response string
 // Format: STATUS_LINE \r\n HEADERS \r\n \r\n BODY
 // Returns the raw HTTP response ready to be sent to the client.
-// ============================================================================
-
 std::string HttpResponse::serialize() const
 {
     std::ostringstream oss;
@@ -155,14 +140,13 @@ std::string HttpResponse::serialize() const
     return oss.str();
 }
 
-// ============================================================================
-// createErrorResponse - Factory method to create error responses
-// ============================================================================
+
+// ========== Static Factory Methods ==========
+
+// ## createErrorResponse - Factory method to create error responses
 // Creates an HTML formatted error page with the given status code.
 // Optional message parameter provides custom error description;
 // if empty, the standard HTTP status message is used.
-// ============================================================================
-
 HttpResponse HttpResponse::createErrorResponse(int code,
                                                const std::string& message)
 {
@@ -192,13 +176,9 @@ HttpResponse HttpResponse::createErrorResponse(int code,
     return response;
 }
 
-// ============================================================================
-// createRedirectResponse - Factory method to create redirect responses
-// ============================================================================
+// ## createRedirectResponse - Factory method to create redirect responses
 // Creates an HTTP redirect response with the given status code and location.
 // Includes the Location header and an HTML page with a clickable link.
-// ============================================================================
-
 HttpResponse HttpResponse::createRedirectResponse(int code,
                                                   const std::string& location)
 {
@@ -224,12 +204,8 @@ HttpResponse HttpResponse::createRedirectResponse(int code,
     return response;
 }
 
-// ============================================================================
-// createOkResponse - Factory method to create success responses
-// ============================================================================
+// ## createOkResponse - Factory method to create success responses
 // Creates a 200 OK response with the given body and content type.
-// ============================================================================
-
 HttpResponse HttpResponse::createOkResponse(
     const std::string& body,
     const std::string& content_type)
@@ -242,12 +218,10 @@ HttpResponse HttpResponse::createOkResponse(
     return response;
 }
 
-// ============================================================================
-// getStatusMessage - Returns standard HTTP status message for a code
-// ============================================================================
-// Maps HTTP status codes to their standard reason phrases.
-// ============================================================================
 
+// ========== HTTP Utils ==========
+
+// getStatusMessage - Returns standard HTTP status message for a code
 std::string HttpResponse::getStatusMessage(int code)
 {
     switch (code)
@@ -288,5 +262,3 @@ std::string HttpResponse::getStatusMessage(int code)
 }
 
 } // namespace wsv
-
-
