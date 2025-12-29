@@ -219,17 +219,17 @@ std::string UploadHandler::_extract_file_content(const HttpRequest& request)
     std::string content = request.getBody();
     
     if (!request.hasHeader("Content-Type"))
-        return content;
+        return content;  // Handles raw binary uploads
     
     std::string content_type = request.getHeader("Content-Type");
     if (content_type.find("multipart/form-data") == std::string::npos)
-        return content;
+        return content;  // Handles other content types (octet-streaming, etc.)
     
     std::string boundary = _extract_boundary(content_type);
     if (boundary.empty())
         return content;
     
-    return _extract_multipart_content(content, boundary);
+    return _extract_multipart_content(content, boundary);  // Only for multipart
 }
 
 /**
@@ -260,67 +260,52 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
     Logger::debug("Boundary: " + boundary);
     Logger::debug("Body size: " + StringUtils::toString(body.size()) + " bytes");
     
-    // 查找 Content-Type 或 Content-Transfer-Encoding 之后的空行
-    // 这是文件内容开始的位置
+    // Find the empty line after Content-Type or Content-Transfer-Encoding
+    // This marks where the file content begins
     
-    // 方法：查找 "\r\n\r\n" (双换行)，这标志着 headers 结束，content 开始
+    // Method: Find "\r\n\r\n", which marks the end of headers and start of content
     size_t content_start = body.find("\r\n\r\n");
     
     if (content_start == std::string::npos)
     {
-        // 尝试只用 \n\n (某些客户端可能不用 \r\n)
-        content_start = body.find("\n\n");
-        if (content_start != std::string::npos)
-        {
-            content_start += 2;  // 跳过 \n\n
-        }
-        else
-        {
-            Logger::warning("Could not find content separator");
-            return body;  // 找不到分隔符，返回原始 body
-        }
+        Logger::warning("Could not find content separator (\\r\\n\\r\\n)");
+        return "";  // Strictly follow HTTP specification
     }
-    else
-    {
-        content_start += 4;  // 跳过 \r\n\r\n
-    }
+    
+    content_start += 4;  // Skip \r\n\r\n
     
     Logger::debug("Content starts at position: " + StringUtils::toString(content_start));
     
-    // 查找结束边界: \r\n--boundary 或 \n--boundary
-    std::string end_boundary1 = "\r\n--" + boundary;
-    std::string end_boundary2 = "\n--" + boundary;
+    // Find end boundary: "\r\n--"boundary
+    std::string end_boundary = "\r\n--" + boundary;
     
-    size_t content_end = body.find(end_boundary1, content_start);
+    size_t content_end = body.find(end_boundary, content_start);
     
     if (content_end == std::string::npos)
     {
-        content_end = body.find(end_boundary2, content_start);
-        if (content_end == std::string::npos)
+        Logger::warning("Could not find end boundary");
+        // Try to find the final boundary marker
+        std::string final_boundary = "--" + boundary + "--";
+        content_end = body.find(final_boundary, content_start);
+        if (content_end != std::string::npos)
         {
-            Logger::warning("Could not find end boundary");
-            // 尝试找到最后的边界标记
-            std::string final_boundary = "--" + boundary + "--";
-            content_end = body.find(final_boundary, content_start);
-            if (content_end != std::string::npos)
+            // Backtrack to remove trailing newlines
+            while (content_end > content_start && 
+                   (body[content_end-1] == '\r' || body[content_end-1] == '\n'))
             {
-                // 往回找换行符
-                while (content_end > content_start && 
-                       (body[content_end-1] == '\r' || body[content_end-1] == '\n'))
-                {
-                    content_end--;
-                }
+                content_end--;
             }
-            else
-            {
-                content_end = body.size();
-            }
+        }
+        else
+        {
+            Logger::error("Invalid multipart format: no end boundary found");
+            return "";
         }
     }
     
     Logger::debug("Content ends at position: " + StringUtils::toString(content_end));
     
-    // 提取实际文件内容
+    // Extract actual file content
     std::string content = body.substr(content_start, content_end - content_start);
     Logger::debug("Extracted content size: " + StringUtils::toString(content.size()) + " bytes");
     Logger::debug("Content preview (first 100 chars): ");

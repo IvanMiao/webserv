@@ -17,7 +17,7 @@ RequestHandler::~RequestHandler()
 { }
 
 // ============================================================================
-// Public Method: handleRequest
+// Public Main Method: handleRequest
 // ============================================================================
 
 /**

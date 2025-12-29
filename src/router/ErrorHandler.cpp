@@ -4,10 +4,13 @@
 
 namespace wsv {
 
-// ============================================================================
-// Generate HTTP error response
-// Tries to load custom error page from server config, falls back to default HTML
-// ============================================================================
+/**
+ * Generate HTTP error response 
+ * Tries to load custom error page from server config, falls back to default HTML
+ * @param status_code HTTP status code (e.g., 404, 500)
+ * @param config Server configuration containing custom error page paths
+ * @return HttpResponse object with status code and body content
+*/
 HttpResponse ErrorHandler::get_error_page(int status_code, const ServerConfig& config)
 {
     // Create response with appropriate HTTP status code

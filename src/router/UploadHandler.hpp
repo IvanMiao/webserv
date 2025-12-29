@@ -12,7 +12,8 @@ namespace wsv {
  * UploadHandler - Handles file upload requests
  * Supports file uploads via POST/multipart requests and saves files to server filesystem.
  */
-class UploadHandler {
+class UploadHandler
+{
 public:
     /**
      * Handle a file upload request
