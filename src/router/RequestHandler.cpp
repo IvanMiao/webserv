@@ -121,18 +121,18 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     Logger::debug("Method = {}, Path = {}", request.getMethod(), request.getPath());
     Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
     
-    // 上传开启 → 调用 UploadHandler
+    // Upload enabled -> call UploadHandler
     if (location_config.upload_enable)
     {
         Logger::debug("Calling UploadHandler");
         return UploadHandler::handle_upload(request, location_config);
     }
 
-    // 构建文件路径
+    // Build file path
     std::string file_path = _buildFilePath(request.getPath(), location_config);
 
     /*
-    // CGI POST 请求
+    // CGI POST request
     if (_isCgiRequest(file_path, location_config))
     {
         // Check if CGI script file exists before attempting execution
@@ -144,7 +144,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     }
     */
 
-    // 其他情况 POST 不允许
+    // Other POST cases not allowed
     return ErrorHandler::get_error_page(405, _config);
 }
 
