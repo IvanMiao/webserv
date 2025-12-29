@@ -6,22 +6,67 @@
 namespace wsv
 {
 
+// Initialize static member
+volatile sig_atomic_t Server::_shutdown_requested = 0;
+
 Server::Server(ConfigParser& config):
 _config(config), _epoll_fd(-1)
 {
 	signal(SIGPIPE, SIG_IGN);
+	signal(SIGINT, Server::signalHandler);
+	_shutdown_requested = 0;
 }
 
 Server::~Server()
 {
-	if (_epoll_fd >= 0)
-		close(_epoll_fd);
-	
-	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
-		close(it->first);
+	cleanup();
+}
 
+void Server::cleanup()
+{
+	Logger::info("Starting server cleanup...");
+
+	// Close all client connections
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
-		close(it->first);
+	{
+		Logger::info("Closing client FD {}", it->first);
+		if (it->first >= 0)
+		{
+			epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, it->first, NULL);
+			close(it->first);
+		}
+	}
+	_clients.clear();
+
+	// Close all listening sockets
+	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
+	{
+		Logger::info("Closing listening socket FD {}", it->first);
+		if (it->first >= 0)
+		{
+			epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, it->first, NULL);
+			close(it->first);
+		}
+	}
+	_listen_fds.clear();
+
+	// Close epoll file descriptor
+	if (_epoll_fd >= 0)
+	{
+		Logger::info("Closing epoll FD {}", _epoll_fd);
+		close(_epoll_fd);
+		_epoll_fd = -1;
+	}
+
+	Logger::info("Server cleanup completed");
+}
+
+void Server::signalHandler(int signum)
+{
+	if (signum == SIGINT)
+	{
+		_shutdown_requested = 1;
+	}
 }
 
 /*
@@ -34,13 +79,19 @@ void Server::start()
 
 	struct epoll_event events[MAX_EVENTS];
 
-	while (true)
+	Logger::info("Server started. Press Ctrl+C to stop.");
+
+	while (!_shutdown_requested)
 	{
 		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
 		if (nfds < 0)
 		{
 			if (errno == EINTR)
+			{
+				if (_shutdown_requested)
+					break;
 				continue;
+			}
 			Logger::error("epoll_wait error");
 			break;
 		}
@@ -63,6 +114,10 @@ void Server::start()
 			}
 		}
 	}
+
+	Logger::info("Shutdown signal received. Cleaning up...");
+	// [TODO] Should we add cleanup() again in the start function?
+	// cleanup();
 }
 
 

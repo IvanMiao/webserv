@@ -52,11 +52,16 @@ private:
 	std::map<int, ServerConfig> _listen_fds;
 	std::map<int, Client> _clients;
 
+	// Shutdown flag
+	static volatile sig_atomic_t _shutdown_requested;
+
 public:
 	Server( ConfigParser& config );
 	~Server();
 
 	void start();
+	void cleanup();
+	static void signalHandler(int signum);
 
 private:
 	// Forbidden copy constructor
