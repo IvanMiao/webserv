@@ -35,9 +35,11 @@
 #define READ_BUFFER_SIZE	4096
 #define WRITE_BUFFER_SIZE	8192
 
-// Timeout values (milliseconds)
-#define EPOLL_TIMEOUT		-1  // -1 means infinite wait
-#define CLIENT_TIMEOUT		60000  // 60 seconds
+// Timeout values
+#define EPOLL_TIMEOUT			1000   // epoll wait timeout: 1000ms = 1 second
+#define CLIENT_IDLE_TIMEOUT		30     // 30 seconds idle timeout
+#define KEEP_ALIVE_TIMEOUT		5      // 5 seconds for keep-alive connections
+#define KEEP_ALIVE_MAX_REQUESTS	100    // Max requests per connection
 
 namespace wsv
 {
@@ -78,8 +80,11 @@ protected:
 	void	_handle_new_connection(int listen_fd);
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
+	void	_check_client_timeouts();
+	void	_close_client(int client_fd);
 
 	std::string	_process_request(int client_fd, const HttpRequest& request);
+	bool	_should_keep_alive(const HttpRequest& request) const;
 };
 
 

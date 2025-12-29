@@ -83,6 +83,9 @@ void Server::start()
 
 	while (!_shutdown_requested)
 	{
+		// Check for client timeouts periodically
+		_check_client_timeouts();
+
 		int nfds = epoll_wait(_epoll_fd, events, MAX_EVENTS, EPOLL_TIMEOUT);
 		if (nfds < 0)
 		{
@@ -257,6 +260,9 @@ void Server::_handle_client_data(int client_fd)
 
 	if (bytes_read > 0)
 	{
+		// Update client activity timestamp
+		client.updateActivity();
+
 		client.request_buffer.append(buffer, bytes_read);
 		client.request.parse(buffer, bytes_read);
 
@@ -265,6 +271,7 @@ void Server::_handle_client_data(int client_fd)
 			Logger::error("Bad Request from client FD {}", client_fd);
 			std::string response = HttpResponse::createErrorResponse(400).serialize();
 			client.response_buffer = response;
+			client.keep_alive = false; // Close connection on error
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 			return;
 		}
@@ -273,31 +280,35 @@ void Server::_handle_client_data(int client_fd)
 		if (client.request.isComplete())
 		{
 			Logger::info("----- Full Request from client FD {} -----", client_fd);
-			// Logger::debug("----- Request Content from client FD {} -----\n{}",
-			//			client_fd, client.request_buffer[:100]);
+			
+			// Increment request count
+			client.requests_count++;
+
+			// Determine if connection should be kept alive
+			client.keep_alive = _should_keep_alive(client.request);
+			if (client.requests_count >= KEEP_ALIVE_MAX_REQUESTS)
+			{
+				Logger::info("Client FD {} reached max requests limit", client_fd);
+				client.keep_alive = false;
+			}
 			
 			// 1. Handle request, generate response 
 			std::string response = _process_request(client_fd, client.request);
 			// 2. Save the response to Client's response_buffer
 			client.response_buffer = response;
 			// 3. modify epoll to care about EPOLLOUT(write)
-			// [TODO]: short connection vs Keep-Alive
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 		}
 	}
 	else if (bytes_read == 0)
 	{
 		Logger::info("Client {} disconnected.", client_fd);
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-		close(client_fd);
-		_clients.erase(client_fd);
+		_close_client(client_fd);
 	}
 	else
 	{
 		Logger::error("Read error on FD {}", client_fd);
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-		close(client_fd);
-		_clients.erase(client_fd);
+		_close_client(client_fd);
 	}
 }
 
@@ -314,9 +325,7 @@ void Server::_handle_client_write(int client_fd)
 	if (bytes_sent < 0)
 	{
 		Logger::error("Send error on FD {}", client_fd);
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-		close(client_fd);
-		_clients.erase(client_fd);
+		_close_client(client_fd);
 		return;
 	}
 
@@ -326,13 +335,24 @@ void Server::_handle_client_write(int client_fd)
 	{
 		Logger::info("##### Response sent fully to FD {} #####", client_fd);
 
-		// [TODO]: short-connection or Kepp-Alive
-		// _modify_epoll(client_fd, EPOLLIN);
-		// client.request.reset();
+		// Update activity timestamp
+		client.updateActivity();
 
-		epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-		close(client_fd);
-		_clients.erase(client_fd);
+		// Keep-Alive: reset client state for next request
+		if (client.keep_alive)
+		{
+			Logger::info("Keep-alive: waiting for next request on FD {}", client_fd);
+			_modify_epoll(client_fd, EPOLLIN);
+			client.request.reset();
+			client.request_buffer.clear();
+			client.response_buffer.clear();
+			client.state = CLIENT_READING_REQUEST;
+		}
+		else
+		{
+			Logger::info("Closing connection to FD {} (no keep-alive)", client_fd);
+			_close_client(client_fd);
+		}
 	}
 }
 
@@ -355,10 +375,79 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 	RequestHandler handler(*config);
 	HttpResponse response = handler.handleRequest(request);
 	
+	// Set Connection header based on keep-alive status
+	if (client.keep_alive)
+		response.setHeader("Connection", "keep-alive");
+	else
+		response.setHeader("Connection", "close");
+	
 	Logger::info("Response built - Status: {}, Request: {} {}", 
 	             response.getStatus(), request.getMethod(), request.getPath());
 	
 	return response.serialize();
+}
+
+/*
+	Check if connection should be kept alive based on request headers
+*/
+bool Server::_should_keep_alive(const HttpRequest& request) const
+{
+	std::string connection = StringUtils::toLower(request.getHeader("Connection"));
+	std::string version = request.getVersion();
+	
+	// HTTP/1.1 defaults to keep-alive unless "Connection: close" is specified
+	if (version == "HTTP/1.1")
+	{
+		if (connection == "close")
+			return false;
+		return true;
+	}
+	// HTTP/1.0 defaults to close unless "Connection: keep-alive" is specified
+	else if (version == "HTTP/1.0")
+	{
+		if (connection == "keep-alive")
+			return true;
+		return false;
+	}
+	
+	return false;
+}
+
+/*
+	Check for client timeouts and close idle connections
+*/
+void Server::_check_client_timeouts()
+{
+	std::vector<int> to_close;
+	
+	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+	{
+		long idle_time = it->second.getIdleTime();
+		long timeout = it->second.keep_alive ? KEEP_ALIVE_TIMEOUT : CLIENT_IDLE_TIMEOUT;
+		
+		if (idle_time > timeout)
+		{
+			Logger::info("Client FD {} timed out after {} seconds (timeout: {} seconds)", 
+			             it->first, idle_time, timeout);
+			to_close.push_back(it->first);
+		}
+	}
+	
+	// Close timed-out clients
+	for (size_t i = 0; i < to_close.size(); ++i)
+	{
+		_close_client(to_close[i]);
+	}
+}
+
+/*
+	Close a client connection and clean up resources
+*/
+void Server::_close_client(int client_fd)
+{
+	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+	close(client_fd);
+	_clients.erase(client_fd);
 }
 
 } // namespace wsv

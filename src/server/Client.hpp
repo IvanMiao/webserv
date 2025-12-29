@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <netinet/in.h>
+#include <ctime>
 #include "ConfigParser.hpp"
 #include "http/HttpRequest.hpp"
 
@@ -29,10 +30,21 @@ public:
 	ClientState	state;
 	const ServerConfig* config; // Associated server config for this connection
 
+	// Keep-alive and timeout management
+	std::time_t last_activity;	// Last activity timestamp (seconds since epoch)
+	bool keep_alive;			// Whether connection should be kept alive
+	int requests_count;			// Number of requests handled on this connection
+
 public:
 	Client();
 	Client(int fd, sockaddr_in addr, const ServerConfig* config);
 	~Client(); // fd is closed by Server
+
+	// Update the last activity timestamp to current time
+	void updateActivity();
+
+	// Get elapsed time since last activity in seconds
+	long getIdleTime() const;
 };
 
 } // namespace wsv
