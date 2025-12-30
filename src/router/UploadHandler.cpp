@@ -375,7 +375,14 @@ HttpResponse UploadHandler::_create_success_response(const std::string& filename
 {
     HttpResponse response;
     response.setStatus(201);
-    response.setHeader("Location", request_path + "/" + filename);
+    
+    // Build Location header: ensure single slash between path and filename
+    std::string location = request_path;
+    if (!location.empty() && location[location.length() - 1] == '/')
+        location = location.substr(0, location.length() - 1);
+    location += "/" + filename;
+    
+    response.setHeader("Location", location);
     response.setHeader("Content-Type", "application/json");
     response.setBody("{\"status\": \"uploaded\", \"filename\": \"" + filename + "\"}");
     return response;

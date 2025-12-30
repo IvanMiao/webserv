@@ -182,7 +182,7 @@ void test_file_upload(TestRunner& runner) {
 			"--" + boundary + "--\r\n";
 			
 		std::string raw_req = 
-			"POST /uploads/test_upload.txt HTTP/1.1\r\n"
+			"POST /uploads/ HTTP/1.1\r\n"
 			"Host: localhost\r\n"
 			"Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
 			"Content-Length: " + StringUtils::toString(body.length()) + "\r\n"
@@ -191,18 +191,27 @@ void test_file_upload(TestRunner& runner) {
 		HttpRequest request(raw_req);
 		HttpResponse response = handler.handleRequest(request);
 		
-		// UploadHandler might return 200 or 201. Based on code read, it returns success response.
-		// Let's check if file exists.
+		// Verify response status (UploadHandler returns 201 Created)
+		if (response.getStatus() != 201) 
+			throw std::runtime_error("Expected 201 Created, got " + StringUtils::toString(response.getStatus()));
+		
+		// Verify Location header is set correctly
+		std::string location = response.getHeader("Location");
+		if (location.empty())
+			throw std::runtime_error("Location header missing from upload response");
+		if (location != "/uploads/test_upload.txt")
+			throw std::runtime_error("Location header incorrect. Expected '/uploads/test_upload.txt', got '" + location + "'");
+		
+		// Verify file exists on disk
 		std::ifstream f("test/www_test/uploads/test_upload.txt");
 		if (!f.good()) throw std::runtime_error("Uploaded file not found on disk");
 		
+		// Verify file content matches what was uploaded (multipart body should be parsed correctly)
 		std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-		// Note: The simple UploadHandler might save the whole body or parse it. 
-		// Looking at UploadHandler.cpp, it calls _extract_file_content. 
-		// Assuming it works correctly for this test.
+		f.close();
 		
-		if (response.getStatus() != 200 && response.getStatus() != 201) 
-			throw std::runtime_error("Expected 200/201, got " + StringUtils::toString(response.getStatus()));
+		if (content != "Uploaded Content") 
+			throw std::runtime_error("File content mismatch. Expected 'Uploaded Content', got '" + content + "'");
 		
 		runner.pass();
 	} catch (const std::exception& e) {

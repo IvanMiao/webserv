@@ -333,7 +333,7 @@ void Server::_handle_client_write(int client_fd)
 
 	if (buffer.empty())
 	{
-		Logger::info("##### Response sent fully to FD {} #####", client_fd);
+		Logger::info("##### Response sent fully to FD {} #####\n", client_fd);
 
 		// Update activity timestamp
 		client.updateActivity();
