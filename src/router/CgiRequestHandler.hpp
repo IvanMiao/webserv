@@ -87,4 +87,3 @@ private:
 } // namespace wsv
 
 #endif // CGI_REQUEST_HANDLER_HPP
-

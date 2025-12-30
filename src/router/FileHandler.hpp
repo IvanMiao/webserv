@@ -66,9 +66,7 @@ public:
     static bool is_directory(const std::string& path);
 
 private:
-    // ========================================
-    // Private Helper Methods
-    // ========================================
+    // Private Helper Method
 
     /**
      * Generate HTML directory listing (for autoindex)
@@ -83,4 +81,3 @@ private:
 } // namespace wsv
 
 #endif // FILE_HANDLER_HPP
-

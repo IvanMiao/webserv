@@ -30,15 +30,19 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     std::string method = request.getMethod();
     Logger::debug("URI = {}, Method = {}", request.getPath(), method);
     
+    // SECURITY: Decode URL BEFORE path traversal check
+    // This prevents bypass via encoded sequences like %2e%2e%2f (../)
+    std::string decoded_path = StringUtils::urlDecode(request.getPath());
+    
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
-    if (request.getPath().find("..") != std::string::npos)
+    if (decoded_path.find("..") != std::string::npos)
     {
-        Logger::debug("Path traversal detected, returning 403");
+        Logger::debug("Path traversal detected in decoded path, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
     
-    const LocationConfig* location_config = _config.findLocation(request.getPath());
+    const LocationConfig* location_config = _config.findLocation(decoded_path);
 
     if (!location_config)
         return ErrorHandler::get_error_page(404, _config);
@@ -61,14 +65,14 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return ErrorHandler::get_error_page(413, _config);
 
     if (method == "GET" || method == "HEAD")
-        return _handleGet(request, *location_config);
+        return _handleGet(request, *location_config, decoded_path);
     else if (method == "POST")
     {
         Logger::debug("Routing to _handlePost");
-        return _handlePost(request, *location_config);
+        return _handlePost(request, *location_config, decoded_path);
     }
     else if (method == "DELETE")
-        return _handleDelete(request, *location_config);
+        return _handleDelete(request, *location_config, decoded_path);
 
     return ErrorHandler::get_error_page(501, _config);
 }
@@ -82,10 +86,10 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
  * Checks file/directory, CGI, and serves static content
  */
 HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
-                                        const LocationConfig& location_config)
+                                        const LocationConfig& location_config,
+                                        const std::string& decoded_path)
 {
-
-    std::string file_path = _buildFilePath(request.getPath(), location_config);
+    std::string file_path = _buildFilePath(decoded_path, location_config);
 
     if (!FileHandler::file_exists(file_path))
         return ErrorHandler::get_error_page(404, _config);
@@ -116,7 +120,8 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
  * Process: Check for upload -> check file exists -> handle CGI scripts -> or return 405
  */
 HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
-                                         const LocationConfig& location_config)
+                                         const LocationConfig& location_config,
+                                         const std::string& decoded_path)
 {
     Logger::debug("Method = {}, Path = {}", request.getMethod(), request.getPath());
     Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
@@ -129,7 +134,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     }
 
     // Build file path
-    std::string file_path = _buildFilePath(request.getPath(), location_config);
+    std::string file_path = _buildFilePath(decoded_path, location_config);
 
     /*
     // CGI POST request
@@ -153,19 +158,23 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
  * Validates file existence, prevents directory deletion, and deletes file
  */
 HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
-                                           const LocationConfig& location_config)
+                                           const LocationConfig& location_config,
+                                           const std::string& decoded_path)
 {
+    (void)request;  // Unused but kept for consistent interface
     // Path traversal check is now done in handleRequest() before method validation
-    std::string file_path = _buildFilePath(request.getPath(), location_config);
+    std::string file_path = _buildFilePath(decoded_path, location_config);
 
     Logger::debug("Full file path: {}", file_path);
 
-    if (!FileHandler::file_exists(file_path)) {
+    if (!FileHandler::file_exists(file_path))
+    {
         Logger::debug("File does not exist, returning 404");
         return ErrorHandler::get_error_page(404, _config);
     }
 
-    if (FileHandler::is_directory(file_path)) {
+    if (FileHandler::is_directory(file_path))
+    {
         Logger::debug("Path is a directory, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
@@ -194,12 +203,13 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
  * Convert URI path to filesystem path
  * Uses Nginx 'root' directive semantics: root + full URI path
  * Example: root ./www, URI /uploads/file.txt -> ./www/uploads/file.txt
+ * Note: uri_path is expected to already be URL-decoded by handleRequest()
  */
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
-    std::string decoded_path = StringUtils::urlDecode(uri_path);
-    return location_config.root + decoded_path;
+    // Path is already decoded in handleRequest() - no need to decode again
+    return location_config.root + uri_path;
 }
 
 
@@ -256,4 +266,3 @@ HttpResponse RequestHandler::_execute_cgi(const HttpRequest& request,
 */
 
 } // namespace wsv
-

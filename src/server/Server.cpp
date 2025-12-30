@@ -69,8 +69,8 @@ void Server::signalHandler(int signum)
 	}
 }
 
-/*
-	Server start and main loop
+/**
+ * @brief CORE. Server start and main loop
 */
 void Server::start()
 {
@@ -381,8 +381,8 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 	else
 		response.setHeader("Connection", "close");
 	
-	Logger::info("Response built - Status: {}, Request: {} {}", 
-	             response.getStatus(), request.getMethod(), request.getPath());
+	Logger::info("Response built - Status: {}, Request: {} {}",
+				response.getStatus(), request.getMethod(), request.getPath());
 	
 	return response.serialize();
 }
@@ -427,8 +427,8 @@ void Server::_check_client_timeouts()
 		
 		if (idle_time > timeout)
 		{
-			Logger::info("Client FD {} timed out after {} seconds (timeout: {} seconds)", 
-			             it->first, idle_time, timeout);
+			Logger::info("Client FD {} timed out after {} seconds (timeout: {} seconds)",
+						it->first, idle_time, timeout);
 			to_close.push_back(it->first);
 		}
 	}

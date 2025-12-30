@@ -47,33 +47,42 @@ private:
      * Handle GET requests
      * @param request HTTP request
      * @param location_config Location-specific configuration
+     * @param decoded_path URL-decoded path from request
      * @return HttpResponse for GET request
      */
     HttpResponse _handleGet(const HttpRequest& request,
-                            const LocationConfig& location_config);
+                            const LocationConfig& location_config,
+                            const std::string& decoded_path);
 
     /**
      * Handle POST requests
      * @param request HTTP request
      * @param location_config Location-specific configuration
+     * @param decoded_path URL-decoded path from request
      * @return HttpResponse for POST request
      */
     HttpResponse _handlePost(const HttpRequest& request,
-                             const LocationConfig& location_config);
+                             const LocationConfig& location_config,
+                             const std::string& decoded_path);
 
     /**
      * Handle DELETE requests
      * @param request HTTP request
      * @param location_config Location-specific configuration
+     * @param decoded_path URL-decoded path from request
      * @return HttpResponse for DELETE request
      */
     HttpResponse _handleDelete(const HttpRequest& request,
-                               const LocationConfig& location_config);
+                               const LocationConfig& location_config,
+                               const std::string& decoded_path);
+
+
+    // ===== Helper Functions =====
 
     /**
      * Build filesystem path from URI
-     * Handles path prefix stripping, URL decoding, and root joining
-     * @param uri_path URI from HTTP request
+     * Note: uri_path should already be URL-decoded before calling this function
+     * @param uri_path Decoded URI from HTTP request
      * @param location_config Location configuration
      * @return Full filesystem path
      */
@@ -119,4 +128,3 @@ private:
 } // namespace wsv
 
 #endif // REQUEST_HANDLER_HPP
-

@@ -213,14 +213,24 @@ std::string UploadHandler::_generate_default_filename()
 
 /**
  * Sanitize filename by removing path separators
+ * SECURITY: Also checks for ".." sequences after sanitization
  */
 std::string UploadHandler::_sanitize_filename(const std::string& filename)
 {
     size_t last_slash = filename.find_last_of("/\\");
-    if (last_slash != std::string::npos)
-        return filename.substr(last_slash + 1);
+    std::string sanitized = (last_slash != std::string::npos) 
+        ? filename.substr(last_slash + 1) 
+        : filename;
     
-    return filename;
+    // SECURITY: Reject filenames containing ".." even after removing path components
+    // This prevents attacks like uploading a file named "..malicious.txt"
+    if (sanitized.find("..") != std::string::npos)
+    {
+        Logger::warning("Filename contains '..' after sanitization, using default name");
+        return _generate_default_filename();
+    }
+    
+    return sanitized;
 }
 
 /**
@@ -402,6 +412,5 @@ bool UploadHandler::_ensure_directory_exists(const std::string& dir_path)
     Logger::error("Failed to create directory: " + dir_path);
     return false;
 }
-
 
 } // namespace wsv

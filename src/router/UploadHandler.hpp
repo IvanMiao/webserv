@@ -60,9 +60,10 @@ private:
     static std::string _generate_default_filename();
 
     /**
-     * Sanitize a filename to remove unsafe characters
+     * Sanitize a filename to remove unsafe characters and path traversal sequences
+     * Removes path components and rejects filenames containing ".."
      * @param filename Original filename
-     * @return Sanitized filename
+     * @return Sanitized filename (or default if unsafe)
      */
     static std::string _sanitize_filename(const std::string& filename);
 
