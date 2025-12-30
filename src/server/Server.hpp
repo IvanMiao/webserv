@@ -75,16 +75,19 @@ protected:
 	void	_init_listening_sockets();
 	void	_init_epoll();
 	int		_create_listening_socket(const std::string& host, int port);
+
 	void	_add_to_epoll(int fd, uint32_t events);
 	void	_modify_epoll(int fd, uint32_t events);
+
 	void	_handle_new_connection(int listen_fd);
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
+
 	void	_check_client_timeouts();
 	void	_close_client(int client_fd);
 
 	std::string	_process_request(int client_fd, const HttpRequest& request);
-	bool	_should_keep_alive(const HttpRequest& request) const;
+	bool		_should_keep_alive(const HttpRequest& request) const;
 };
 
 
