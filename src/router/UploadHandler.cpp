@@ -115,11 +115,13 @@ std::string UploadHandler::_extract_filename(const HttpRequest& request)
         if (pos != std::string::npos)
         {
             size_t end = body.find("\r\n", pos);
-            if (end == std::string::npos) end = body.find("\n", pos);
+            if (end == std::string::npos)
+                end = body.find("\n", pos);
             if (end != std::string::npos)
             {
                 std::string filename = _extract_multipart_filename(body.substr(pos, end - pos));
-                if (!filename.empty()) return filename;
+                if (!filename.empty())
+                    return filename;
             }
         }
         return _generate_default_filename();
@@ -137,7 +139,8 @@ std::string UploadHandler::_extract_filename(const HttpRequest& request)
         if (disp_pos != std::string::npos)
         {
             size_t end = part.find("\r\n", disp_pos);
-            if (end == std::string::npos) end = part.find("\n", disp_pos);
+            if (end == std::string::npos)
+                end = part.find("\n", disp_pos);
             if (end != std::string::npos)
             {
                 std::string filename = _extract_multipart_filename(part.substr(disp_pos, end - disp_pos));
@@ -301,11 +304,9 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
                 size_t content_start = header_end + 4;
                 size_t content_end = next_pos;
                 
+                // Should not happen in valid multipart, but handle it
                 if (content_end == std::string::npos)
-                {
-                    // Should not happen in valid multipart, but handle it
                     content_end = body.length();
-                }
 
                 // Backtrack to remove \r\n before the boundary
                 if (content_end >= 2 && body[content_end - 2] == '\r' && body[content_end - 1] == '\n')
@@ -313,7 +314,7 @@ std::string UploadHandler::_extract_multipart_content(const std::string& body,
                 else if (content_end >= 1 && body[content_end - 1] == '\n')
                     content_end -= 1;
 
-                Logger::debug("Found file part. Content starts at " + StringUtils::toString(content_start) + 
+                Logger::debug("Found file part. Content starts at " + StringUtils::toString(content_start) +
                              ", ends at " + StringUtils::toString(content_end));
                 return body.substr(content_start, content_end - content_start);
             }
@@ -346,7 +347,7 @@ HttpResponse UploadHandler::_save_file(const std::string& file_path,
     }
     
     output.write(content.c_str(), content.size());
-    
+
     // Check if write operation succeeded
     if (output.fail())
     {
