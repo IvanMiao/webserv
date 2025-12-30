@@ -1,5 +1,5 @@
 #include "ConfigParser.hpp"
-#include "../utils/StringUtils.hpp"
+#include "utils/StringUtils.hpp"
 #include <cctype> 
 #include <cstdlib> 
 #include <algorithm>
@@ -10,7 +10,7 @@ namespace wsv
 // ==================== LocationConfig ====================
 LocationConfig::LocationConfig() 
 	: path("/") 
-	, root("/var/www/html") 
+	, root("") 
 	, index("index.html") 
 	, autoindex(false) 
 	, redirect_code(0) 
@@ -153,6 +153,9 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 			}
 			else  // just port
 				server.listen_port = std::atoi(value.c_str());
+			
+			if (server.listen_port <= 0 || server.listen_port > 65535)
+				throw std::runtime_error("Invalid port number: " + value);
 		}
 		// server_name localhost example.com;
 		else if (StringUtils::startsWith(line, "server_name"))
@@ -203,7 +206,7 @@ void ConfigParser::_parseServerBlock(std::ifstream& file, std::string& line)
 	}
 	
 	// If end of file is reached without finding '}'
-	_servers.push_back(server);
+	throw std::runtime_error("Unexpected end of file inside server block");
 }
 
 void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
@@ -239,6 +242,9 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 		// End of location block
 		if (line == "}" || line == "};")
 		{
+			// If location doesn't have root, inherit from server
+			if (location.root.empty())
+				location.root = server.root;
 			server.locations.push_back(location);
 			return;
 		}
@@ -333,7 +339,7 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 		}
 	}
 	
-	server.locations.push_back(location);
+	throw std::runtime_error("Error: Unexpected end of file inside location block");
 }
 
 const std::vector<ServerConfig>& ConfigParser::getServers() const

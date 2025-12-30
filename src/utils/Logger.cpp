@@ -3,7 +3,7 @@
 namespace wsv
 {
 
-std::string Logger::getTimestamp()
+std::string Logger::_getTimestamp()
 {
 	char buffer[80];
 	std::time_t rawtime;
@@ -17,7 +17,7 @@ std::string Logger::getTimestamp()
 	return std::string(buffer);
 }
 
-std::string Logger::formatMessage(const std::string& format, const std::string args[], size_t count)
+std::string Logger::_formatMessage(const std::string& format, const std::string args[], size_t count)
 {
 	std::string result = format;
 	for (size_t i = 0; i < count; ++i)
@@ -31,23 +31,35 @@ std::string Logger::formatMessage(const std::string& format, const std::string a
 
 void Logger::info(const std::string& message)
 {
-	std::cout << "[" << getTimestamp() << "] "
+	std::cout << "[" << _getTimestamp() << "] "
 			  << GREEN << "INFO" << RESET << ": "
 			  << message << std::endl;
 }
 
 void Logger::warning(const std::string& message)
 {
-	std::cout << "[" << getTimestamp() << "] "
+	std::cout << "[" << _getTimestamp() << "] "
 			  << YELLOW << "WARNING: " << RESET << ": "
 			  << message << std::endl;
 }
 
 void Logger::error(const std::string& message)
 {
-	std::cerr << "[" << getTimestamp() << "] "
+	std::cerr << "[" << _getTimestamp() << "] "
 			  << RED << "ERROR" << RESET << ": "
 			  << message << std::endl;
+}
+
+void Logger::debug(const std::string& message)
+{
+#ifdef DEBUG
+	std::cout << "[" << _getTimestamp() << "] "
+			  << BLUE << "DEBUG" << RESET << ": "
+			  << message << std::endl;
+#else
+	(void) message;
+	return;
+#endif
 }
 
 } // namespace wsv

@@ -94,11 +94,51 @@ std::string removeSemicolon(const std::string& str)
 	return trim(result);
 }
 
-std::string toString(int value)
+std::string	toString(int value)
 {
 	std::stringstream ss;
 	ss << value;
 	return ss.str();
+}
+
+std::string	toLower(const std::string& str)
+{
+	std::string result = str;
+
+	for (size_t i = 0; i < result.size(); ++i)
+		result[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
+	
+	return result;
+}
+
+// URL decode a string (e.g. %20 -> space)
+std::string urlDecode(const std::string& str)
+{
+	std::string result;
+	result.reserve(str.size());
+	
+	for (size_t i = 0; i < str.size(); ++i)
+	{
+		if (str[i] == '%' && i + 2 < str.size())
+		{
+			// Convert hex digits to char
+			int hex_value;
+			std::istringstream hex_stream(str.substr(i + 1, 2));
+			if (hex_stream >> std::hex >> hex_value)
+			{
+				result += static_cast<char>(hex_value);
+				i += 2;  // Skip the two hex digits
+			}
+			else
+				result += str[i];  // Invalid hex, keep the %
+		}
+		else if (str[i] == '+')
+			result += ' ';  // + is often used for space in URLs
+		else
+			result += str[i];
+	}
+	
+	return result;
 }
 
 } // namespace StringUtils
