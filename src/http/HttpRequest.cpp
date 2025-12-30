@@ -118,9 +118,7 @@ bool HttpRequest::_tryParseRequestLine()
     _parseRequestLine(request_line);
     
     if (_state != PARSE_ERROR)
-    {
         _state = PARSING_HEADERS;
-    }
     
     return true;
 }
@@ -218,9 +216,7 @@ void HttpRequest::_parseHeaderLine(const std::string& line)
     size_t colon_pos = line.find(':');
     
     if (colon_pos == std::string::npos)
-    {
         return;  // Malformed header, skip it
-    }
 
     // Extract and normalize key (lowercase)
     std::string key = StringUtils::toLower(StringUtils::trim(line.substr(0, colon_pos)));
@@ -290,9 +286,7 @@ bool HttpRequest::_parseChunkedBody()
         if (_chunk_finished)
         {
             if (!_tryReadChunkSize())
-            {
                 return false;  // Need more data
-            }
             
             // Check for last chunk (size 0)
             if (_chunk_size == 0)
@@ -304,9 +298,7 @@ bool HttpRequest::_parseChunkedBody()
 
         // State 2: Reading chunk data
         if (!_tryReadChunkData())
-        {
             return false;  // Need more data
-        }
     }
 }
 
@@ -316,15 +308,17 @@ bool HttpRequest::_tryReadChunkSize()
     size_t line_end = _buffer.find("\r\n");
     
     if (line_end == std::string::npos)
-    {
         return false;  // Need more data
-    }
 
     // Extract and parse chunk size
     std::string size_line = _buffer.substr(0, line_end);
     _buffer.erase(0, line_end + 2);
 
     _chunk_size = _parseChunkSize(size_line);
+    
+    if (_state == PARSE_ERROR)
+        return false;
+
     _chunk_finished = false;
     
     return true;
@@ -334,9 +328,7 @@ bool HttpRequest::_tryReadChunkData()
 {
     // Check if we have enough data for chunk + trailing \r\n
     if (_buffer.size() < _chunk_size + 2)
-    {
         return false;  // Need more data
-    }
 
     // Append chunk data to body
     _body.append(_buffer.substr(0, _chunk_size));
@@ -356,11 +348,29 @@ size_t HttpRequest::_parseChunkSize(const std::string& line)
     // May be followed by chunk extensions after ';'
     // Example: "1a3" or "1a3;name=value"
     
+    if (line.empty())
+    {
+        _state = PARSE_ERROR;
+        return 0;
+    }
+
+    // RFC 7230: chunk-size = 1*HEXDIG
+    // Must start with a hex digit
+    if (!std::isxdigit(static_cast<unsigned char>(line[0])))
+    {
+        _state = PARSE_ERROR;
+        return 0;
+    }
+
     size_t size = 0;
     std::istringstream stream(line);
     
     // Parse hex number
-    stream >> std::hex >> size;
+    if (!(stream >> std::hex >> size))
+    {
+        _state = PARSE_ERROR;
+        return 0;
+    }
     
     return size;
 }
