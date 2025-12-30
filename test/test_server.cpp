@@ -42,7 +42,7 @@ void test_config_parser_values(TestRunner& runner)
 		const wsv::ServerConfig& s1 = servers[0];
 		if (s1.listen_port != 8080) throw std::runtime_error("Server 1 port mismatch");
 		if (s1.host != "127.0.0.1") throw std::runtime_error("Server 1 host mismatch");
-		if (s1.root != "./www") throw std::runtime_error("Server 1 root mismatch");
+		if (s1.root != "./www/site_8080") throw std::runtime_error("Server 1 root mismatch");
 		
 		// Check locations
 		const wsv::LocationConfig* loc_upload = s1.findLocation("/uploads");
