@@ -113,16 +113,15 @@ CgiHandler::~CgiHandler()
     if (_child_pid > 0)
     {
         kill(_child_pid, SIGKILL);
-        waitpid(_child_pid, NULL, WNOHANG); // Anti-zombie, though usually WNOHANG isn't enough if we want to be sure, but we are deleting object. 
-        // Better: waitpid without WNOHANG if we sent SIGKILL? or WNOHANG is fine because init will reap it if we die?
-        // Actually if we just kill, we should wait.
-        // But if process already exited?
+        waitpid(_child_pid, NULL, WNOHANG);
+        // [TODO] Better: waitpid without WNOHANG if we sent SIGKILL?
+        // or WNOHANG is fine because init will reap it if we die?
         waitpid(_child_pid, NULL, 0); 
     }
 }
 
 // ========================================
-// Configuration Methods
+// Setters
 // ========================================
 
 void CgiHandler::setCGIBin(const std::string& path)
@@ -148,30 +147,6 @@ void CgiHandler::setInput(const std::string& input)
 void CgiHandler::setTimeout(unsigned int seconds)
 {
     _timeout = seconds;
-}
-
-// ========================================
-// Getters
-// ========================================
-
-std::string CgiHandler::getCGIBin() const
-{
-    return _cgi_bin;
-}
-
-std::string CgiHandler::getScriptPath() const
-{
-    return _script_path;
-}
-
-CgiHandler::HeaderMap CgiHandler::getEnvironment() const
-{
-    return _environment;
-}
-
-std::string CgiHandler::getInput() const
-{
-    return _input;
 }
 
 // ========================================
@@ -208,21 +183,6 @@ pid_t CgiHandler::start()
              throw PipeFailed();
     }
     
-    return _child_pid;
-}
-
-int CgiHandler::getStdinWriteFd() const
-{
-    return _pipes.input_pipe[1];
-}
-
-int CgiHandler::getStdoutReadFd() const
-{
-    return _pipes.output_pipe[0];
-}
-
-pid_t CgiHandler::getChildPid() const
-{
     return _child_pid;
 }
 
@@ -313,7 +273,6 @@ void CgiHandler::_redirectChildIO(const _PipeSet& pipes)
     // Close all original pipe FDs as they are now duplicated
     // Note: We need to close everything to avoid leaks in child
     // _PipeSet::closeAll won't work easily here because it's const, 
-    // but we can manually close the known descriptors.
     
     close(pipes.input_pipe[0]);
     close(pipes.input_pipe[1]);

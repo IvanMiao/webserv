@@ -6,6 +6,7 @@ INCLUDE	:= -I src -I src/server -I src/config -I src/utils -I src/router -I src/
 SRC_FILES	:= main.cpp \
 				config/ConfigParser.cpp \
 				server/Server.cpp \
+				server/Server_helper.cpp \
 				server/Client.cpp \
 				http/HttpRequest.cpp \
 				http/HttpResponse.cpp \

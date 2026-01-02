@@ -7,6 +7,7 @@ TEST_SERVER		:= test_server
 TEST_SERVER_SRC	:= test/test_server.cpp \
 				   src/config/ConfigParser.cpp \
 				   src/server/Server.cpp \
+				   src/server/Server_helper.cpp \
 				   src/server/Client.cpp \
 				   src/http/HttpRequest.cpp \
 				   src/http/HttpResponse.cpp \

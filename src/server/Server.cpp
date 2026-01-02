@@ -169,6 +169,12 @@ int Server::_create_listening_socket(const std::string& host, int port)
 		throw std::runtime_error("Cannot set socket to non-blocking");
 	}
 
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot set socket to FD_CLOEXEC");
+	}
+
 	struct addrinfo hints = {};
 	struct addrinfo *res;
 	hints.ai_family = AF_INET;
@@ -204,6 +210,12 @@ void Server::_init_epoll()
 	_epoll_fd = epoll_create(42);
 	if (_epoll_fd < 0)
 		throw std::runtime_error("epoll_create failed");
+
+	if (fcntl(_epoll_fd, F_SETFD, FD_CLOEXEC) == -1)
+	{
+		close(_epoll_fd);
+		throw std::runtime_error("Cannot set epoll fd to FD_CLOEXEC");
+	}
 
 	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
 	{
@@ -259,6 +271,7 @@ void Server::_handle_new_connection(int listen_fd)
 
 	int flags = fcntl(client_fd, F_GETFL, 0);
 	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+	fcntl(client_fd, F_SETFD, FD_CLOEXEC);
 
 	// Get the ServerConfig for this listening port
 	const ServerConfig* config = &_listen_fds[listen_fd];
@@ -421,7 +434,6 @@ void Server::_process_request(int client_fd)
 	}
 
 	// Normal synchronous response
-	
 	// Set Connection header based on keep-alive status
 	if (client.keep_alive)
 		response.setHeader("Connection", "keep-alive");
@@ -517,149 +529,6 @@ void Server::_close_client(int client_fd)
 	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 	close(client_fd);
 	_clients.erase(client_fd);
-}
-
-/*
-	Handle CGI data events
-*/
-void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
-{
-	int client_fd = _cgi_fd_map[cgi_fd];
-	Client& client = _clients[client_fd];
-
-	if (client.state != CLIENT_CGI_PROCESSING)
-	{
-		Logger::error("CGI event for client {} not in CGI state", client_fd);
-		_remove_from_epoll(cgi_fd);
-		close(cgi_fd);
-		_cgi_fd_map.erase(cgi_fd);
-		return;
-	}
-
-	CgiHandler* handler = client.cgi_handler;
-	if (!handler) {
-		Logger::error("CGI handler missing for client {}", client_fd);
-		return;
-	}
-
-	// 1. Write to CGI Stdin (if this fd is input_fd)
-	if (cgi_fd == client.cgi_input_fd && (events & EPOLLOUT))
-	{
-		std::string input = handler->getInput();
-		ssize_t written = write(cgi_fd, input.c_str(), input.size());
-		
-		if (written >= 0)
-		{
-			// Input written (or empty), close stdin to signal EOF to CGI
-			handler->closeStdin();
-			_remove_from_epoll(cgi_fd);
-			_cgi_fd_map.erase(cgi_fd);
-			client.cgi_input_fd = -1;
-		}
-		else
-		{
-			Logger::error("Failed to write to CGI stdin");
-			handler->closeStdin();
-			_remove_from_epoll(cgi_fd);
-			_cgi_fd_map.erase(cgi_fd);
-			client.cgi_input_fd = -1;
-		}
-	}
-	
-	// 2. Read from CGI Stdout (if this fd is output_fd)
-	if (cgi_fd == client.cgi_output_fd && (events & (EPOLLIN | EPOLLHUP)))
-	{
-		char buffer[READ_BUFFER_SIZE];
-		ssize_t bytes = read(cgi_fd, buffer, sizeof(buffer));
-
-		if (bytes > 0)
-		{
-			client.response_buffer.append(buffer, bytes);
-		}
-		else if (bytes == 0 || (events & EPOLLHUP))
-		{
-			// CGI finished
-			Logger::info("CGI stdout closed, processing response");
-			
-			// Wait for child
-			int status;
-			waitpid(handler->getChildPid(), &status, 0); 
-
-			// Check exit status
-			if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
-			{
-				Logger::error("CGI process exited with error status: {}", WEXITSTATUS(status));
-				client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
-				client.state = CLIENT_WRITING_RESPONSE;
-			}
-			else
-			{
-				// Parse Output
-				// client.response_buffer currently contains RAW CGI output (headers + body)
-				CgiHandler::HeaderMap cgi_headers;
-				std::string body;
-				CgiHandler::parseCgiOutput(client.response_buffer, cgi_headers, body);
-
-				// Build HttpResponse
-				HttpResponse response;
-				response.setBody(body);
-				
-				// Parse Status header
-				if (cgi_headers.count("Status"))
-				{
-					std::istringstream iss(cgi_headers["Status"]);
-					int code = 200;
-					iss >> code;
-					response.setStatus(code);
-				}
-				else
-				{
-					response.setStatus(200);
-				}
-
-				// Add other headers
-				for (std::map<std::string, std::string>::iterator it = cgi_headers.begin(); it != cgi_headers.end(); ++it)
-				{
-					if (it->first != "Status")
-						response.setHeader(it->first, it->second);
-				}
-
-				// Keep-alive headers logic
-				if (client.keep_alive)
-					response.setHeader("Connection", "keep-alive");
-				else
-					response.setHeader("Connection", "close");
-
-				client.response_buffer = response.serialize();
-				client.state = CLIENT_WRITING_RESPONSE;
-			}
-			// Cleanup
-			_remove_from_epoll(cgi_fd);
-			close(cgi_fd);
-			_cgi_fd_map.erase(cgi_fd);
-			client.cgi_output_fd = -1;
-
-			// Cleanup handler
-			delete client.cgi_handler;
-			client.cgi_handler = NULL;
-
-			// Re-enable client socket
-			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
-		}
-		else
-		{
-			Logger::error("Read error from CGI stdout");
-			// Handle error... return 500
-			_remove_from_epoll(cgi_fd);
-			close(cgi_fd);
-			_cgi_fd_map.erase(cgi_fd);
-			client.cgi_output_fd = -1;
-			
-			client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
-			client.state = CLIENT_WRITING_RESPONSE;
-			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
-		}
-	}
 }
 
 } // namespace wsv

@@ -16,25 +16,17 @@ class CgiHandler
     friend class CgiHandlerTestable;
 
 public:
-    // ========================================
     // Type Definitions
-    // ========================================
-    
     typedef std::map<std::string, std::string> HeaderMap;
-    
-    // ========================================
+
     // Constants
-    // ========================================
-    
     static const size_t BUFFER_SIZE = 4096;
     static const size_t MAX_OUTPUT_SIZE = 10485760;
     static const unsigned int DEFAULT_TIMEOUT = 30;
     static const int EXIT_CGI_FAILED = 42;
-    
-    // ========================================
+
+
     // Exception Classes
-    // ========================================
-    
     class PipeFailed : public std::runtime_error 
     {
     public:
@@ -72,59 +64,48 @@ public:
     public:
         OutputTooLarge() : std::runtime_error("CGI output exceeds maximum size") {}
     };
-    
-    // ========================================
+
+
     // Constructors & Destructor
-    // ========================================
-    
     CgiHandler();
     CgiHandler(const std::string& cgi_bin, const std::string& script_path);
     ~CgiHandler();
-    
-    // ========================================
-    // Configuration Methods
-    // ========================================
-    
+
+
+    // Setters
     void setCGIBin(const std::string& path);
     void setScriptPath(const std::string& path);
     void setEnvironmentVariable(const std::string& key, const std::string& value);
     void setInput(const std::string& input);
     void setTimeout(unsigned int seconds);
-    
-    // ========================================
+
     // Getters
-    // ========================================
-    
-    std::string getCGIBin() const;
-    std::string getScriptPath() const;
-    HeaderMap getEnvironment() const;
-    std::string getInput() const;
-    
+    std::string getCGIBin() const { return _cgi_bin; };
+    std::string getScriptPath() const { return _script_path; };
+    HeaderMap getEnvironment() const { return _environment; };
+    std::string getInput() const { return _input; };
+
+    int getStdinWriteFd() const { return _pipes.input_pipe[1]; };
+    int getStdoutReadFd() const { return _pipes.output_pipe[0]; };
+    pid_t getChildPid() const { return _child_pid; };
+
+
     // Helpers for parsing output after read is done
     static void parseCgiOutput(const std::string& raw_output, HeaderMap& headers, std::string& body);
 
-    // ========================================
+
     // Non-Blocking Execution API
-    // ========================================
-    
     /**
      * @brief Start the CGI process
      * @return PID of the child process
      */
     pid_t start();
 
-    int getStdinWriteFd() const;
-    int getStdoutReadFd() const;
-    pid_t getChildPid() const;
-
     void closeStdin();      // Call when finished writing input
     void closePipes();      // Call when finished everything or error
 
 private:
-    // ========================================
     // Helper Structures
-    // ========================================
-    
     struct _PipeSet
     {
         int input_pipe[2];
@@ -146,11 +127,9 @@ private:
         void _build(const HeaderMap& env_map);
         char** _getEnvironmentArray();
     };
-    
-    // ========================================
+
+
     // Member Variables
-    // ========================================
-    
     std::string _cgi_bin;
     std::string _script_path;
     HeaderMap _environment;
@@ -159,11 +138,9 @@ private:
     
     _PipeSet _pipes;
     pid_t _child_pid;
-    
-    // ========================================
+
+
     // Internal Methods
-    // ========================================
-    
     void _executeInChild(const _PipeSet& pipes, _EnvironmentBuilder& env);
     void _redirectChildIO(const _PipeSet& pipes);
     void _executeCGIScript(_EnvironmentBuilder& env);
