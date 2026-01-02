@@ -2,85 +2,67 @@
 #include "cgi/CgiHandler.hpp"
 #include "utils/StringUtils.hpp"
 #include "utils/Logger.hpp"
+#include "server/Client.hpp"
+#include "ErrorHandler.hpp"
 #include <sstream>
 
 namespace wsv
 {
 
-// ============================================================================
-// Execute CGI script and process output
-// Process: Build environment -> execute script -> parse output -> return response
-// Supports both GET and POST CGI requests
-// ============================================================================
-HttpResponse CgiRequestHandler::execute_cgi(const HttpRequest& request,
-                                            const std::string& script_path,
-                                            const LocationConfig& location_config,
-                                            const ServerConfig& server_config)
+
+
+void CgiRequestHandler::startCgi(Client& client,
+                                 const std::string& script_path,
+                                 const LocationConfig& location_config,
+                                 const ServerConfig& server_config)
 {
-    // Create CGI executor with interpreter path and script file
-    CgiHandler cgi_executor(location_config.cgi_path, script_path);
+    // Ensure distinct handler for this client
+    if (client.cgi_handler)
+    {
+        delete client.cgi_handler;
+        client.cgi_handler = NULL;
+    }
+
+    CgiHandler* handler = new CgiHandler(location_config.cgi_path, script_path);
+    client.cgi_handler = handler;
 
     // 1. Build CGI environment variables
     std::map<std::string, std::string> env_vars =
-        _build_cgi_environment(request, location_config, server_config);
+        _build_cgi_environment(client.request, script_path, location_config, server_config);
 
     for (std::map<std::string, std::string>::const_iterator it = env_vars.begin();
          it != env_vars.end(); ++it)
     {
-        cgi_executor.setEnvironmentVariable(it->first, it->second);
+        handler->setEnvironmentVariable(it->first, it->second);
     }
 
     // 2. Provide request body as CGI stdin if POST
-    if (request.getMethod() == "POST")
+    if (client.request.getMethod() == "POST")
     {
-        cgi_executor.setInput(request.getBody());
+        handler->setInput(client.request.getBody());
     }
 
-    // 3. Execute the CGI script
+    // 3. Start the CGI process
     try
     {
-        cgi_executor.execute();
+        pid_t pid = handler->start();
+        client.cgi_input_fd = handler->getStdinWriteFd();
+        client.cgi_output_fd = handler->getStdoutReadFd();
+        client.state = CLIENT_CGI_PROCESSING;
+        
+        Logger::info("Started CGI process {} for client FD {}", pid, client.client_fd);
     }
-    catch (const CgiHandler::Timeout& e)
+    catch (const std::exception& e)
     {
-        Logger::error("CGI Timeout: " + std::string(e.what()));
-        HttpResponse response;
-        response.setStatus(504);  // Gateway Timeout
-        return response;
+        Logger::error("Failed to start CGI: {}", e.what());
+        delete client.cgi_handler;
+        client.cgi_handler = NULL;
+        
+        // Return 500 error immediately
+        HttpResponse error_res = ErrorHandler::get_error_page(500, server_config);
+        client.response_buffer = error_res.serialize();
+        client.state = CLIENT_WRITING_RESPONSE;
     }
-    catch (const std::runtime_error& e)
-    {
-        Logger::error("CGI Error: " + std::string(e.what()));
-        HttpResponse response;
-        response.setStatus(500);  // Internal Server Error
-        return response;
-    }
-
-    // 4. Parse CGI output into HttpResponse
-    HttpResponse response;
-    std::map<std::string, std::string> cgi_headers =
-        cgi_executor.getResponseHeaders();
-
-    int status_code = 200; // default
-
-    for (std::map<std::string, std::string>::const_iterator it = cgi_headers.begin();
-         it != cgi_headers.end(); ++it)
-    {
-        if (it->first == "Status")
-        {
-            std::istringstream iss(it->second);
-            iss >> status_code;
-        }
-        else
-        {
-            response.setHeader(it->first, it->second);
-        }
-    }
-
-    response.setStatus(status_code);
-    response.setBody(cgi_executor.getOutput());
-
-    return response;
 }
 
 // ============================================================================
@@ -89,24 +71,18 @@ HttpResponse CgiRequestHandler::execute_cgi(const HttpRequest& request,
 // ============================================================================
 std::map<std::string, std::string> CgiRequestHandler::_build_cgi_environment(
     const HttpRequest& request,
+    const std::string& script_path,
     const LocationConfig& location_config,
     const ServerConfig& server_config)
 {
+    (void)location_config;
     std::map<std::string, std::string> env_vars;
 
     // REQUEST_METHOD: GET, POST, etc.
     env_vars["REQUEST_METHOD"] = request.getMethod();
 
     // SCRIPT_FILENAME: full path on filesystem
-    {
-        std::string relative_path = request.getPath();
-        if (request.getPath().find(location_config.path) == 0)
-            relative_path = request.getPath().substr(location_config.path.size());
-        if (relative_path.empty() || relative_path[0] != '/')
-            relative_path = "/" + relative_path;
-        relative_path = StringUtils::urlDecode(relative_path);
-        env_vars["SCRIPT_FILENAME"] = location_config.root + relative_path;
-    }
+    env_vars["SCRIPT_FILENAME"] = script_path;
 
     // SCRIPT_NAME: path portion of URL
     env_vars["SCRIPT_NAME"] = request.getPath();

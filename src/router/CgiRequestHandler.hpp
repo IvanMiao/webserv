@@ -9,6 +9,7 @@
 
 namespace wsv
 {
+class Client;
 
 /**
  * CgiRequestHandler - Handles execution of CGI scripts
@@ -22,17 +23,18 @@ class CgiRequestHandler
 {
 public:
     /**
-     * Execute a CGI script and return the HTTP response
-     * @param request The parsed HTTP request
+     * Start async CGI execution
+     * @param client Client object 
      * @param script_path Filesystem path to CGI script
-     * @param location_config Location-specific configuration
-     * @param server_config Server-wide configuration
-     * @return HttpResponse generated from CGI output
+     * @param location_config Location configuration
+     * @param server_config Server configuration
      */
-    static HttpResponse execute_cgi(const HttpRequest& request,
-                                    const std::string& script_path,
-                                    const LocationConfig& location_config,
-                                    const ServerConfig& server_config);
+    static void startCgi(Client& client,
+                         const std::string& script_path,
+                         const LocationConfig& location_config,
+                         const ServerConfig& server_config);
+
+
 
 private:
     // ========================================
@@ -49,6 +51,7 @@ private:
      */
     static std::map<std::string, std::string> _build_cgi_environment(
         const HttpRequest& request,
+        const std::string& script_path,
         const LocationConfig& location_config,
         const ServerConfig& server_config
     );

@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <sys/wait.h>
 
 namespace wsv
 {
@@ -106,6 +107,10 @@ void Server::start()
 
 			if (_listen_fds.find(current_fd) != _listen_fds.end())
 				_handle_new_connection(current_fd);
+			else if (_cgi_fd_map.find(current_fd) != _cgi_fd_map.end())
+			{
+				_handle_cgi_data(current_fd, events_flag);
+			}
 			else
 			{
 				// Read first, then handle Write
@@ -226,6 +231,12 @@ void Server::_modify_epoll(int fd, uint32_t events)
 		throw std::runtime_error("epoll_ctl mod failed");
 }
 
+void Server::_remove_from_epoll(int fd)
+{
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0)
+		Logger::error("epoll_ctl del failed for fd {}", fd);
+}
+
 // create Client
 void Server::_handle_new_connection(int listen_fd)
 {
@@ -292,12 +303,15 @@ void Server::_handle_client_data(int client_fd)
 				client.keep_alive = false;
 			}
 			
-			// 1. Handle request, generate response 
-			std::string response = _process_request(client_fd, client.request);
-			// 2. Save the response to Client's response_buffer
-			client.response_buffer = response;
-			// 3. modify epoll to care about EPOLLOUT(write)
-			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+			// 1. Handle request (Async or Sync)
+			_process_request(client_fd);
+
+			// If state became WRITING_RESPONSE, enable write event
+			// If state is CGI_PROCESSING, _process_request disabled events already
+			if (client.state == CLIENT_WRITING_RESPONSE)
+			{
+				_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+			}
 		}
 	}
 	else if (bytes_read == 0)
@@ -359,7 +373,7 @@ void Server::_handle_client_write(int client_fd)
 /*
 	Process request using RequestHandler
 */
-std::string Server::_process_request(int client_fd, const HttpRequest& request)
+void Server::_process_request(int client_fd)
 {
 	Logger::info("Request received, preparing to send response...");
 	Client& client = _clients[client_fd];
@@ -368,12 +382,38 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 	if (!config)
 	{
 		Logger::error("No server config found for client FD {}", client_fd);
-		return HttpResponse::createErrorResponse(500).serialize();
+		client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
+		client.state = CLIENT_WRITING_RESPONSE;
+		return;
 	}
 
 	// Create RequestHandler and process the request
 	RequestHandler handler(*config);
-	HttpResponse response = handler.handleRequest(request);
+	
+	// Handles CGI start internally. Checks client.state for async changes.
+	HttpResponse response = handler.handleRequest(client);
+	
+	if (client.state == CLIENT_CGI_PROCESSING)
+	{
+		Logger::info("Async CGI started for client FD {}", client_fd);
+		
+		// Register CGI pipes to epoll
+		if (client.cgi_input_fd != -1) {
+			_add_to_epoll(client.cgi_input_fd, EPOLLOUT);
+			_cgi_fd_map[client.cgi_input_fd] = client_fd;
+		}
+		if (client.cgi_output_fd != -1) {
+			_add_to_epoll(client.cgi_output_fd, EPOLLIN);
+			_cgi_fd_map[client.cgi_output_fd] = client_fd;
+		}
+
+		// Disable client socket events while waiting for CGI
+		// We don't want to read more requests or write anything yet
+		_modify_epoll(client_fd, 0);
+		return;
+	}
+
+	// Normal synchronous response
 	
 	// Set Connection header based on keep-alive status
 	if (client.keep_alive)
@@ -382,9 +422,10 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 		response.setHeader("Connection", "close");
 	
 	Logger::info("Response built - Status: {}, Request: {} {}",
-				response.getStatus(), request.getMethod(), request.getPath());
+				response.getStatus(), client.request.getMethod(), client.request.getPath());
 	
-	return response.serialize();
+	client.response_buffer = response.serialize();
+	client.state = CLIENT_WRITING_RESPONSE;
 }
 
 /*
@@ -445,9 +486,162 @@ void Server::_check_client_timeouts()
 */
 void Server::_close_client(int client_fd)
 {
+	// Clean up CGI resources if active
+	if (_clients.find(client_fd) != _clients.end())
+	{
+		Client& client = _clients[client_fd];
+		if (client.cgi_input_fd != -1)
+		{
+			_remove_from_epoll(client.cgi_input_fd);
+			_cgi_fd_map.erase(client.cgi_input_fd);
+			close(client.cgi_input_fd); // CgiHandler destructor will also try, but good to be explicit
+			client.cgi_input_fd = -1;
+		}
+		if (client.cgi_output_fd != -1)
+		{
+			_remove_from_epoll(client.cgi_output_fd);
+			_cgi_fd_map.erase(client.cgi_output_fd);
+			close(client.cgi_output_fd);
+			client.cgi_output_fd = -1;
+		}
+		// CgiHandler is deleted in Client destructor, which is called when erasing from _clients map
+	}
+
 	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 	close(client_fd);
 	_clients.erase(client_fd);
+}
+
+void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
+{
+	int client_fd = _cgi_fd_map[cgi_fd];
+	Client& client = _clients[client_fd];
+
+	if (client.state != CLIENT_CGI_PROCESSING)
+	{
+		Logger::error("CGI event for client {} not in CGI state", client_fd);
+		_remove_from_epoll(cgi_fd);
+		close(cgi_fd);
+		_cgi_fd_map.erase(cgi_fd);
+		return;
+	}
+
+	CgiHandler* handler = client.cgi_handler;
+	if (!handler) {
+		Logger::error("CGI handler missing for client {}", client_fd);
+		return;
+	}
+
+	// 1. Write to CGI Stdin (if this fd is input_fd)
+	if (cgi_fd == client.cgi_input_fd && (events & EPOLLOUT))
+	{
+		std::string input = handler->getInput();
+		ssize_t written = write(cgi_fd, input.c_str(), input.size());
+		
+		if (written >= 0)
+		{
+			// Input written (or empty), close stdin to signal EOF to CGI
+			handler->closeStdin();
+			_remove_from_epoll(cgi_fd);
+			_cgi_fd_map.erase(cgi_fd);
+			client.cgi_input_fd = -1;
+		}
+		else
+		{
+			Logger::error("Failed to write to CGI stdin");
+			handler->closeStdin();
+			_remove_from_epoll(cgi_fd);
+			_cgi_fd_map.erase(cgi_fd);
+			client.cgi_input_fd = -1;
+		}
+	}
+	
+	// 2. Read from CGI Stdout (if this fd is output_fd)
+	if (cgi_fd == client.cgi_output_fd && (events & (EPOLLIN | EPOLLHUP)))
+	{
+		char buffer[READ_BUFFER_SIZE];
+		ssize_t bytes = read(cgi_fd, buffer, sizeof(buffer));
+
+		if (bytes > 0)
+		{
+			client.response_buffer.append(buffer, bytes);
+		}
+		else if (bytes == 0 || (events & EPOLLHUP))
+		{
+			// CGI finished
+			Logger::info("CGI stdout closed, processing response");
+			
+			// Wait for child
+			int status;
+			waitpid(handler->getChildPid(), &status, 0); // Should be instant/zombie
+			// Check status...
+
+			// Parse Output
+			// client.response_buffer currently contains RAW CGI output (headers + body)
+			CgiHandler::HeaderMap cgi_headers;
+			std::string body;
+			CgiHandler::parseCgiOutput(client.response_buffer, cgi_headers, body);
+
+			// Build HttpResponse
+			HttpResponse response;
+			response.setBody(body);
+			
+			// Parse Status header
+			if (cgi_headers.count("Status"))
+			{
+				std::istringstream iss(cgi_headers["Status"]);
+				int code = 200;
+				iss >> code;
+				response.setStatus(code);
+			}
+			else
+			{
+				response.setStatus(200);
+			}
+
+			// Add other headers
+			for (std::map<std::string, std::string>::iterator it = cgi_headers.begin(); it != cgi_headers.end(); ++it)
+			{
+				if (it->first != "Status")
+					response.setHeader(it->first, it->second);
+			}
+
+			// Keep-alive headers logic
+			if (client.keep_alive)
+				response.setHeader("Connection", "keep-alive");
+			else
+				response.setHeader("Connection", "close");
+
+			client.response_buffer = response.serialize();
+			client.state = CLIENT_WRITING_RESPONSE;
+
+			// Cleanup
+			_remove_from_epoll(cgi_fd);
+			close(cgi_fd);
+			_cgi_fd_map.erase(cgi_fd);
+			client.cgi_output_fd = -1;
+
+			// Cleanup handler
+			delete client.cgi_handler;
+			client.cgi_handler = NULL;
+
+			// Re-enable client socket
+			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+		}
+		else
+		{
+			Logger::error("Read error from CGI stdout");
+			// Handle error... return 500
+			_remove_from_epoll(cgi_fd);
+			close(cgi_fd);
+			_cgi_fd_map.erase(cgi_fd);
+			client.cgi_output_fd = -1;
+			
+			client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
+			client.state = CLIENT_WRITING_RESPONSE;
+			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+		}
+	}
 }
 
 } // namespace wsv

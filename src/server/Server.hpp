@@ -54,6 +54,9 @@ private:
 	std::map<int, ServerConfig> _listen_fds;
 	std::map<int, Client> _clients;
 
+	// CGI Pipe FD -> Client FD
+	std::map<int, int> _cgi_fd_map;
+
 	// Shutdown flag
 	static volatile sig_atomic_t _shutdown_requested;
 
@@ -78,15 +81,17 @@ protected:
 
 	void	_add_to_epoll(int fd, uint32_t events);
 	void	_modify_epoll(int fd, uint32_t events);
+	void	_remove_from_epoll(int fd);
 
 	void	_handle_new_connection(int listen_fd);
 	void	_handle_client_data(int client_fd);
 	void	_handle_client_write(int client_fd);
+	void	_handle_cgi_data(int cgi_fd, uint32_t events);
 
 	void	_check_client_timeouts();
 	void	_close_client(int client_fd);
 
-	std::string	_process_request(int client_fd, const HttpRequest& request);
+	void	_process_request(int client_fd);
 	bool		_should_keep_alive(const HttpRequest& request) const;
 };
 

@@ -12,10 +12,12 @@ TEST_SERVER_SRC	:= test/test_server.cpp \
 				   src/http/HttpResponse.cpp \
 				   src/router/RequestHandler.cpp \
 				   src/router/FileHandler.cpp \
+				   src/router/CgiRequestHandler.cpp \
 				   src/router/UploadHandler.cpp \
 				   src/router/ErrorHandler.cpp \
 				   src/utils/Logger.cpp \
-				   src/utils/StringUtils.cpp
+				   src/utils/StringUtils.cpp \
+				   src/cgi/CgiHandler.cpp
 
 TEST_HTTP_REQUEST		:= test_httprequest
 TEST_HTTP_REQUEST_SRC	:= test/test_httprequest.cpp \
@@ -34,10 +36,12 @@ TEST_REQUEST_HANDLER_SRC := test/test_requesthandler.cpp \
                            src/http/HttpResponse.cpp \
                            src/router/RequestHandler.cpp \
                            src/router/FileHandler.cpp \
+                           src/router/CgiRequestHandler.cpp \
                            src/router/UploadHandler.cpp \
                            src/router/ErrorHandler.cpp \
                            src/utils/Logger.cpp \
-                           src/utils/StringUtils.cpp
+                           src/utils/StringUtils.cpp \
+                           src/cgi/CgiHandler.cpp
 
 TEST_EXECUTABLES := $(TEST_PARSER) $(TEST_SERVER) $(TEST_HTTP_REQUEST) $(TEST_HTTP_RESPONSE) $(TEST_REQUEST_HANDLER)
 

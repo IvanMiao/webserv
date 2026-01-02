@@ -7,6 +7,7 @@
 #include <ctime>
 #include "ConfigParser.hpp"
 #include "http/HttpRequest.hpp"
+#include "cgi/CgiHandler.hpp"
 
 namespace wsv {
 
@@ -14,6 +15,7 @@ enum ClientState
 {
 	CLIENT_READING_REQUEST,
 	CLIENT_PROCESSING,
+	CLIENT_CGI_PROCESSING,
 	CLIENT_WRITING_RESPONSE
 };
 
@@ -34,6 +36,11 @@ public:
 	std::time_t last_activity;	// Last activity timestamp (seconds since epoch)
 	bool keep_alive;			// Whether connection should be kept alive
 	int requests_count;			// Number of requests handled on this connection
+
+	// CGI integration
+	CgiHandler* cgi_handler;    // Managed pointer to active CGI handler
+	int cgi_input_fd;           // Pipe to write request body to CGI stdin
+	int cgi_output_fd;          // Pipe to read response from CGI stdout
 
 public:
 	Client();
