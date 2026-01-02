@@ -1,65 +1,119 @@
-# CGI (Common Gateway Interface)
+# CGI (Common Gateway Interface) 模块
 
-CGI 是一种标准协议，用于 Web 服务器与外部应用程序（CGI 脚本）之间进行交互。它允许服务器生成动态内容，而不仅仅是提供静态文件。
+CGI 模块允许 Web 服务器执行外部程序（脚本）并将动态生成的内容返回给客户端。本项目采用 **非阻塞（Non-Blocking）** 架构实现 CGI，确保耗时的脚本执行不会阻塞服务器的主事件循环。
 
-## 1. 工作原理
+## 1. 架构设计 (Non-Blocking Architecture)
 
-当 Web 服务器收到一个指向 CGI 脚本的请求时，它会执行以下步骤：
+传统的 CGI 实现往往是阻塞的：服务器 `fork` 子进程后，父进程通过 `read()` 阻塞等待子进程输出。这会导致在脚本运行期间，服务器无法处理其他客户端请求。
 
-1.  **识别请求**：根据配置文件（如 `default.conf`）中的 `cgi_path` 或文件扩展名识别出这是一个 CGI 请求。
-2.  **准备环境**：服务器设置一系列环境变量（如 `REQUEST_METHOD`, `QUERY_STRING`, `PATH_INFO` 等），这些变量包含了请求的所有细节。
-3.  **创建子进程**：服务器使用 `fork()` 创建一个子进程。
-4.  **重定向 I/O**：
-    *   使用 `pipe()` 创建管道。
-    *   将子进程的 `stdin` 重定向到管道的读端（用于接收 POST 请求的 Body）。
-    *   将子进程的 `stdout` 重定向到管道的写端（用于捕获脚本的输出）。
-5.  **执行脚本**：子进程使用 `execve()` 执行 CGI 解释器（如 `/usr/bin/python3` 或 `/usr/bin/php-cgi`）并运行脚本。
-6.  **读取输出**：父进程从管道中读取脚本的输出。
-7.  **生成响应**：服务器解析脚本输出的 Header（如 `Status`, `Content-Type`），并将其封装成 `HttpResponse` 发送给客户端。
+**本项目采用 Reactor 模式配合 `epoll` 实现异步 CGI 处理：**
+
+1.  **请求路由**：`CgiRequestHandler` 识别 CGI 请求，准备环境变量。
+2.  **进程启动**：`CgiHandler` 调用 `fork()` 和 `execve()`，并创建 **非阻塞管道** (Non-blocking Pipes)。
+3.  **事件注册**：
+    *   将 CGI 的 `stdout` 管道（读端）注册到 `epoll` (EPOLLIN)。
+    *   如果有 POST 数据，将 `stdin` 管道（写端）注册到 `epoll` (EPOLLOUT)。
+4.  **状态保存**：`Client` 对象保存 CGI 相关的 FDs 和 `CgiHandler` 实例，并将状态切换为 `CLIENT_CGI_PROCESSING`。
+5.  **事件循环**：
+    *   `Server` 主循环继续处理其他连接。
+    *   当 CGI 管道就绪时，`Server::_handle_cgi_data` 被触发。
+6.  **数据传输**：
+    *   **写输入**：向 CGI 进程写入请求体（非阻塞）。
+    *   **读输出**：从 CGI 进程读取响应数据到缓冲区。
+7.  **完成处理**：
+    *   当管道关闭或遇到 EOF，Server 回收子进程 (`waitpid`)。
+    *   解析 CGI 输出（分离 Headers 和 Body）。
+    *   构建 `HttpResponse` 并发送给客户端。
+
+### 核心类与职责
+
+*   **`CgiHandler`**: 
+    *   负责底层的 `pipe`, `fork`, `dup2`, `execve`。
+    *   管理环境变量转换。
+    *   提供非阻塞 FD 供外部注册。
+*   **`CgiRequestHandler`**: 
+    *   构建符合 RFC 3875 标准的环境变量 (`REQUEST_METHOD`, `SCRIPT_NAME` 等)。
+    *   初始化 CGI 流程。
+*   **`Server`**: 
+    *   集成 `epoll` 监听 CGI 管道。
+    *   分发 I/O 事件 (`_handle_cgi_data`)。
+    *   处理超时和进程回收。
 
 ## 2. 核心环境变量 (RFC 3875)
 
-本项目实现了以下核心环境变量：
+服务器会向 CGI 脚本传递以下标准环境变量：
 
 | 变量名 | 描述 | 示例 |
 | :--- | :--- | :--- |
 | `REQUEST_METHOD` | HTTP 请求方法 | `GET`, `POST` |
-| `QUERY_STRING` | URL 中 `?` 后面的参数 | `id=123&name=test` |
-| `CONTENT_LENGTH` | 请求体的长度（仅 POST） | `42` |
-| `CONTENT_TYPE` | 请求体的 MIME 类型 | `application/x-www-form-urlencoded` |
-| `PATH_INFO` | 脚本路径后的额外路径信息 | `/extra/path` |
-| `SCRIPT_NAME` | 脚本的虚拟路径 | `/cgi-bin/hello.py` |
-| `SCRIPT_FILENAME` | 脚本在文件系统中的绝对路径 | `/var/www/cgi-bin/hello.py` |
-| `SERVER_NAME` | 服务器的主机名或 IP | `localhost` |
-| `SERVER_PORT` | 服务器监听的端口 | `8080` |
-| `SERVER_PROTOCOL` | 使用的协议版本 | `HTTP/1.1` |
-| `GATEWAY_INTERFACE` | CGI 版本 | `CGI/1.1` |
+| `QUERY_STRING` | URL 参数 | `id=123&name=test` |
+| `CONTENT_LENGTH` | 请求体长度 | `42` |
+| `CONTENT_TYPE` | 请求体类型 | `application/json` |
+| `SCRIPT_NAME` | 脚本请求路径 | `/cgi-bin/test.py` |
+| `SCRIPT_FILENAME` | 脚本物理绝对路径 | `/var/www/cgi-bin/test.py` |
+| `SERVER_PROTOCOL` | HTTP 版本 | `HTTP/1.1` |
 
-## 3. 项目实现细节
+## 3. 测试指南 (Testing Guide)
 
-在本项目中，CGI 的处理主要分布在以下类中：
+本项目包含一套完整的自动化测试脚本，位于 `test/` 目录下，用于验证 CGI 的功能、并发性和健壮性。
 
-*   **`CgiRequestHandler`**: 负责高层逻辑，包括环境准备、调用执行器和解析输出。
-*   **`CgiHandler`**: (待完善) 负责底层的 `fork`, `execve` 和管道管理。
+### 3.1 准备工作
 
-### 示例流程
+确保已安装 `python3`。
 
-```mermaid
-sequenceDiagram
-    Client->>Server: GET /cgi-bin/test.py?name=val
-    Server->>CgiRequestHandler: handleRequest()
-    CgiRequestHandler->>CgiRequestHandler: _build_cgi_environment()
-    CgiRequestHandler->>CgiHandler: execute()
-    CgiHandler->>OS: fork() & execve()
-    OS->>CgiHandler: Script Output (via pipe)
-    CgiHandler->>CgiRequestHandler: Raw Output
-    CgiRequestHandler->>Server: HttpResponse
-    Server->>Client: HTTP/1.1 200 OK ...
+### 3.2 启动服务器
+
+在项目根目录下编译并启动服务器：
+
+```bash
+make re
+./webserv config/default.conf
 ```
 
-## 4. 注意事项
+### 3.3 运行测试脚本
 
-*   **超时处理**：CGI 脚本可能会死循环，服务器需要实现超时机制（如使用 `waitpid` 的 `WNOHANG` 或设置定时器）。
-*   **安全性**：执行外部程序存在安全风险，应限制脚本的执行权限和访问范围。
-*   **错误处理**：如果脚本执行失败或返回格式错误，服务器应返回 `500 Internal Server Error` 或 `504 Gateway Timeout`。
+在另一个终端中运行以下测试。
 
+#### A. 功能测试 (Functional Tests)
+验证基本的 GET/POST 方法、环境变量传递和 Header 解析。
+
+```bash
+python3 test/test_cgi_methods.py
+```
+*   **预期结果**: 所有检查项显示 `PASS`。
+
+#### B. 并发测试 (Concurrency Tests)
+**核心测试**：验证慢速 CGI 脚本是否会阻塞服务器。该脚本会发起一个耗时 5 秒的 CGI 请求，同时发起一个静态文件请求。
+
+```bash
+python3 test/test_cgi_concurrency.py
+```
+*   **预期结果**: 静态文件请求应立即返回（< 0.1s），不受 CGI 脚本影响。
+
+#### C. 负载测试 (Load Tests)
+模拟并发发送 20+ 个 CGI 请求。
+
+```bash
+python3 test/test_cgi_load.py
+```
+*   **预期结果**: 所有请求均成功 (200 OK)，无连接失败。
+
+#### D. 错误处理测试 (Error Handling)
+测试脚本崩溃、脚本不存在、超时等异常情况。
+
+```bash
+python3 test/test_cgi_errors.py
+```
+*   **预期结果**: 
+    *   Crash Script -> 500 Internal Server Error (而不是 200)
+    *   Missing Script -> 404 Not Found
+
+## 4. 提供的 CGI 脚本
+
+`www/cgi-bin/` 目录下预置了以下脚本供测试使用：
+
+*   `echo_env.py`: 打印所有环境变量。
+*   `echo_body.py`: 回显 POST 请求体。
+*   `sleep.py`: 睡眠 5 秒（用于并发测试）。
+*   `crash.py`: 模拟进程崩溃（非零退出码）。
+*   `large_output.py`: 生成大量数据测试缓冲区。

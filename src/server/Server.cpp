@@ -234,7 +234,14 @@ void Server::_modify_epoll(int fd, uint32_t events)
 void Server::_remove_from_epoll(int fd)
 {
 	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0)
-		Logger::error("epoll_ctl del failed for fd {}", fd);
+	{
+		// ENOENT = FD was not in epoll (benign if we just want to ensure removal)
+		// EBADF = FD invalid or closed (benign if closed elsewhere)
+		if (errno == ENOENT || errno == EBADF)
+			Logger::debug("epoll_ctl del skipped (benign): fd {} not in epoll or invalid", fd);
+		else
+			Logger::error("epoll_ctl del failed for fd {}", fd);
+	}
 }
 
 // create Client
@@ -512,6 +519,9 @@ void Server::_close_client(int client_fd)
 	_clients.erase(client_fd);
 }
 
+/*
+	Handle CGI data events
+*/
 void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 {
 	int client_fd = _cgi_fd_map[cgi_fd];
@@ -573,48 +583,56 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			
 			// Wait for child
 			int status;
-			waitpid(handler->getChildPid(), &status, 0); // Should be instant/zombie
-			// Check status...
+			waitpid(handler->getChildPid(), &status, 0); 
 
-			// Parse Output
-			// client.response_buffer currently contains RAW CGI output (headers + body)
-			CgiHandler::HeaderMap cgi_headers;
-			std::string body;
-			CgiHandler::parseCgiOutput(client.response_buffer, cgi_headers, body);
-
-			// Build HttpResponse
-			HttpResponse response;
-			response.setBody(body);
-			
-			// Parse Status header
-			if (cgi_headers.count("Status"))
+			// Check exit status
+			if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
 			{
-				std::istringstream iss(cgi_headers["Status"]);
-				int code = 200;
-				iss >> code;
-				response.setStatus(code);
+				Logger::error("CGI process exited with error status: {}", WEXITSTATUS(status));
+				client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
+				client.state = CLIENT_WRITING_RESPONSE;
 			}
 			else
 			{
-				response.setStatus(200);
+				// Parse Output
+				// client.response_buffer currently contains RAW CGI output (headers + body)
+				CgiHandler::HeaderMap cgi_headers;
+				std::string body;
+				CgiHandler::parseCgiOutput(client.response_buffer, cgi_headers, body);
+
+				// Build HttpResponse
+				HttpResponse response;
+				response.setBody(body);
+				
+				// Parse Status header
+				if (cgi_headers.count("Status"))
+				{
+					std::istringstream iss(cgi_headers["Status"]);
+					int code = 200;
+					iss >> code;
+					response.setStatus(code);
+				}
+				else
+				{
+					response.setStatus(200);
+				}
+
+				// Add other headers
+				for (std::map<std::string, std::string>::iterator it = cgi_headers.begin(); it != cgi_headers.end(); ++it)
+				{
+					if (it->first != "Status")
+						response.setHeader(it->first, it->second);
+				}
+
+				// Keep-alive headers logic
+				if (client.keep_alive)
+					response.setHeader("Connection", "keep-alive");
+				else
+					response.setHeader("Connection", "close");
+
+				client.response_buffer = response.serialize();
+				client.state = CLIENT_WRITING_RESPONSE;
 			}
-
-			// Add other headers
-			for (std::map<std::string, std::string>::iterator it = cgi_headers.begin(); it != cgi_headers.end(); ++it)
-			{
-				if (it->first != "Status")
-					response.setHeader(it->first, it->second);
-			}
-
-			// Keep-alive headers logic
-			if (client.keep_alive)
-				response.setHeader("Connection", "keep-alive");
-			else
-				response.setHeader("Connection", "close");
-
-			client.response_buffer = response.serialize();
-			client.state = CLIENT_WRITING_RESPONSE;
-
 			// Cleanup
 			_remove_from_epoll(cgi_fd);
 			close(cgi_fd);
