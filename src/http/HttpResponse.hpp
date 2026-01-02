@@ -73,5 +73,3 @@ public:
 } // namespace wsv
 
 #endif // HTTP_RESPONSE_HPP
-
-

@@ -9,8 +9,6 @@
 namespace wsv
 {
 
-
-
 void CgiRequestHandler::startCgi(Client& client,
                                  const std::string& script_path,
                                  const LocationConfig& location_config,
