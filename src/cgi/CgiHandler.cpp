@@ -7,8 +7,7 @@
 #include <cstring>
 #include <cerrno>
 #include <sstream>
-#include <cstdlib>   // C++
-#include <stdlib.h>  // C
+#include <cstdlib>
 #include <vector>
 
 // ========================================
@@ -300,16 +299,16 @@ void CgiHandler::_executeInChild(const _PipeSet& pipes, _EnvironmentBuilder& env
     alarm(_timeout); 
     _redirectChildIO(pipes);
     _executeCGIScript(env);
-    exit(EXIT_CGI_FAILED);
+    std::exit(EXIT_CGI_FAILED);
 }
 
 void CgiHandler::_redirectChildIO(const _PipeSet& pipes)
 {
     if (dup2(pipes.input_pipe[0], STDIN_FILENO) == -1)
-        exit(EXIT_CGI_FAILED);
+        std::exit(EXIT_CGI_FAILED);
 
     if (dup2(pipes.output_pipe[1], STDOUT_FILENO) == -1)
-        exit(EXIT_CGI_FAILED);
+        std::exit(EXIT_CGI_FAILED);
 
     // Close all original pipe FDs as they are now duplicated
     // Note: We need to close everything to avoid leaks in child
