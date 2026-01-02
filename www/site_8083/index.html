@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Needy-Webserv</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
+<style>
+@font-face {
+    font-family: 'Pixel-Mono';
+    src: url('https://fonts.cdnfonts.com/s/16218/MS Sans Serif.woff') format('woff');
+}
+
+:root {
+    --lavender: #A186D5;
+    --bg-purple: #9B7BBE;
+    --taskbar-bg: #d8bfd8;
+    --text-dark: #333333;
+    --bg-window-pink: #fbc2eb;
+}
+
+body {
+    font-family: 'Pixel-Mono', 'VT323', monospace;
+    margin: 0;
+    overflow: hidden;
+    background-color: #fbc2eb;
+    background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 40 h10 v-10 h10 v-10 h10 v 10 h10 v 10 h10 v-10 h10 v-10 h10 v 10 h10 v 10 h10 v-10 h10 v-10 h10 v 10' fill='none' stroke='%23b2f5ff' stroke-width='6'/%3E%3Cpath d='M0 100 h10 v-10 h10 v-10 h10 v 10 h10 v 10 h10 v-10 h10 v-10 h10 v 10 h10 v 10 h10 v-10 h10 v-10 h10 v 10' fill='none' stroke='%23b2f5ff' stroke-width='6'/%3E%3C/svg%3E");
+            background-size: 120px 120px;
+    height: 100vh;
+}
+
+.pixel-window {
+    position: absolute;
+    background: var(--bg-window-pink);
+    border: 4px solid var(--bg-purple);
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    image-rendering: pixelated;
+}
+
+.title-bar {
+    height: 32px;
+    background: var(--bg-purple);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    cursor: move;
+}
+
+.win-btn {
+    border: 2px solid white;
+    width: 20px;
+    height: 20px;
+    line-height: 14px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg-purple);
+}
+
+.window-body {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.btn-action {
+    background: white;
+    border: 3px solid var(--bg-purple);
+    padding: 2px 8px;
+    font-size: 12px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+}
+.btn-action:active { transform: translate(2px, 2px); box-shadow: none; }
+
+.task-item {
+    background: white;
+    border: 2px solid var(--bg-purple);
+    padding: 2px 10px;
+    margin-right: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.task-item.active {
+    background: var(--bg-purple);
+    color: white;
+}
+
+#windows-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none; 
+}
+.pixel-window { pointer-events: auto; }
+
+
+.scaled-text { font-size: calc(14px * var(--win-font-scale, 1)); }
+.scaled-title { font-size: calc(20px * var(--win-font-scale, 1)); font-weight: bold; }
+
+
+.desktop-icon {
+    width: 72px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+}
+
+.desktop-icon img {
+    width: 42px;
+    height: 42px;
+    background: #ffffff;
+    border: 3px solid #9B7BBE;
+    padding: 4px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
+    pointer-events: none;
+}
+
+.desktop-icon span {
+    margin-top: 4px;
+    background: white;
+    border: 2px solid #9B7BBE;
+    font-size: 11px;
+    padding: 0 4px;
+    white-space: nowrap;
+}
+
+
+.terminal-body { background: #000; color: #33FF33; height: 100%; padding: 10px; font-family: monospace; overflow-y: auto; }
+.terminal-input { background: transparent; border: none; color: #33FF33; outline: none; width: 80%; }
+
+
+.resize-handle {
+    position: absolute;
+    right: 0; bottom: 0;
+    width: 16px; height: 16px;
+    cursor: nwse-resize;
+    background: var(--bg-purple);
+}
+</style>
+</head>
+<body>
+    <div id="desktop">
+        <div id="icons-container" class="absolute top-8 left-8 flex flex-col"></div>
+        <div id="windows-container"></div>
+        <div class="taskbar fixed bottom-0 w-full h-12 bg-[#d8bfd8] border-t-4 border-white flex items-center px-4 z-50">
+            <button class="start-btn border-4 border-[#9B7BBE] bg-white px-4 font-bold mr-4" id="start-btn-main">START</button>
+            <div id="taskbar-apps" class="flex"></div>
+            <div class="ml-auto flex gap-4 text-sm font-bold">
+                <div>DAY 42</div>
+                <div id="clock">00:00</div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="index.js"></script>
+</body>
+</html>
