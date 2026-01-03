@@ -488,8 +488,55 @@ void Server::_check_client_timeouts()
 	
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
 	{
-		long idle_time = it->second.getIdleTime();
-		long timeout = it->second.keep_alive ? KEEP_ALIVE_TIMEOUT : CLIENT_IDLE_TIMEOUT;
+		Client& client = it->second;
+		long idle_time = client.getIdleTime();
+
+		// CGI timeout handling - parent process enforced
+		if (client.state == CLIENT_CGI_PROCESSING)
+		{
+			if (idle_time > CGI_TIMEOUT)
+			{
+				Logger::error("CGI timeout for client FD {} after {} seconds", it->first, idle_time);
+				
+				// Forcibly kill the CGI child process
+				if (client.cgi_handler && client.cgi_handler->getChildPid() > 0)
+				{
+					kill(client.cgi_handler->getChildPid(), SIGKILL);
+					waitpid(client.cgi_handler->getChildPid(), NULL, WNOHANG);
+				}
+				
+				// Clean up CGI pipe FDs
+				if (client.cgi_input_fd != -1)
+				{
+					_remove_from_epoll(client.cgi_input_fd);
+					_cgi_fd_map.erase(client.cgi_input_fd);
+					close(client.cgi_input_fd);
+					client.cgi_input_fd = -1;
+				}
+				if (client.cgi_output_fd != -1)
+				{
+					_remove_from_epoll(client.cgi_output_fd);
+					_cgi_fd_map.erase(client.cgi_output_fd);
+					close(client.cgi_output_fd);
+					client.cgi_output_fd = -1;
+				}
+				
+				// Clean up CGI handler
+				delete client.cgi_handler;
+				client.cgi_handler = NULL;
+				
+				// Send 504 Gateway Timeout response
+				client.response_buffer = HttpResponse::createErrorResponse(504).serialize();
+				client.state = CLIENT_WRITING_RESPONSE;
+				client.keep_alive = false; // Close connection after timeout
+				_modify_epoll(it->first, EPOLLIN | EPOLLOUT);
+			}
+			// Don't check regular idle timeout while CGI is processing
+			continue;
+		}
+		
+		// Regular client idle timeout
+		long timeout = client.keep_alive ? KEEP_ALIVE_TIMEOUT : CLIENT_IDLE_TIMEOUT;
 		
 		if (idle_time > timeout)
 		{

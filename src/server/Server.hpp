@@ -40,6 +40,7 @@
 #define CLIENT_IDLE_TIMEOUT		30     // 30 seconds idle timeout
 #define KEEP_ALIVE_TIMEOUT		5      // 5 seconds for keep-alive connections
 #define KEEP_ALIVE_MAX_REQUESTS	100    // Max requests per connection
+#define CGI_TIMEOUT				30     // 30 seconds CGI execution timeout
 
 namespace wsv
 {

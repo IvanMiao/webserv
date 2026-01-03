@@ -257,9 +257,6 @@ void CgiHandler::parseCgiOutput(const std::string& raw_output, HeaderMap& header
 
 void CgiHandler::_executeInChild(const _PipeSet& pipes, _EnvironmentBuilder& env)
 {
-    // Note: alarm might kill the process, but we should handle timeout in parent via epoll/timers ideally.
-    // However, keeping alarm as a safety net for the child process itself is okay.
-    alarm(_timeout); 
     _redirectChildIO(pipes);
     _executeCGIScript(env);
     std::exit(EXIT_CGI_FAILED);

@@ -23,8 +23,6 @@ public:
     typedef std::map<std::string, std::string> HeaderMap;
 
     // Constants
-    static const size_t BUFFER_SIZE = 4096;
-    static const size_t MAX_OUTPUT_SIZE = 10485760;
     static const unsigned int DEFAULT_TIMEOUT = 30;
     static const int EXIT_CGI_FAILED = 42;
 
