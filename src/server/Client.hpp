@@ -38,9 +38,9 @@ public:
 	int requests_count;			// Number of requests handled on this connection
 
 	// CGI integration
-	CgiHandler* cgi_handler;    // Managed pointer to active CGI handler
-	int cgi_input_fd;           // Pipe to write request body to CGI stdin
-	int cgi_output_fd;          // Pipe to read response from CGI stdout
+	CgiHandler* cgi_handler;	// Managed pointer to active CGI handler
+	int cgi_input_fd;			// Pipe to write request body to CGI stdin
+	int cgi_output_fd;			// Pipe to read response from CGI stdout
 
 public:
 	Client();
@@ -55,7 +55,5 @@ public:
 };
 
 } // namespace wsv
-
-
 
 #endif

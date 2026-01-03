@@ -303,6 +303,7 @@ void Server::_handle_client_data(int client_fd)
 			std::string response = HttpResponse::createErrorResponse(400).serialize();
 			client.response_buffer = response;
 			client.keep_alive = false; // Close connection on error
+			client.state = CLIENT_WRITING_RESPONSE;
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 			return;
 		}
@@ -351,6 +352,13 @@ void Server::_handle_client_write(int client_fd)
 {
 	Client& client = _clients[client_fd];
 	std::string& buffer = client.response_buffer;
+
+	// Only write to client when explicitly in the WRITING_RESPONSE state
+	// This prevents writing raw CGI stdout (which is temporarily stored in
+	// client.response_buffer while a CGI is running) before the CGI output is
+	// parsed and converted into a full HTTP response.
+	if (client.state != CLIENT_WRITING_RESPONSE)
+		return;
 
 	if (buffer.empty())
 		return;

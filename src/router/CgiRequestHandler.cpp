@@ -21,28 +21,26 @@ void CgiRequestHandler::startCgi(Client& client,
         client.cgi_handler = NULL;
     }
 
-    CgiHandler* handler = new CgiHandler(location_config.cgi_path, script_path);
-    client.cgi_handler = handler;
-
-    // 1. Build CGI environment variables
-    std::map<std::string, std::string> env_vars =
-        _build_cgi_environment(client.request, script_path, location_config, server_config);
-
-    for (std::map<std::string, std::string>::const_iterator it = env_vars.begin();
-         it != env_vars.end(); ++it)
-    {
-        handler->setEnvironmentVariable(it->first, it->second);
-    }
-
-    // 2. Provide request body as CGI stdin if POST
-    if (client.request.getMethod() == "POST")
-    {
-        handler->setInput(client.request.getBody());
-    }
-
-    // 3. Start the CGI process
     try
     {
+        CgiHandler* handler = new CgiHandler(location_config.cgi_path, script_path);
+        client.cgi_handler = handler;
+
+        // 1. Build CGI environment variables
+        std::map<std::string, std::string> env_vars =
+            _build_cgi_environment(client.request, script_path, location_config, server_config);
+
+        for (std::map<std::string, std::string>::const_iterator it = env_vars.begin();
+            it != env_vars.end(); ++it)
+        {
+            handler->setEnvironmentVariable(it->first, it->second);
+        }
+
+        // 2. Provide request body as CGI stdin if POST
+        if (client.request.getMethod() == "POST")
+            handler->setInput(client.request.getBody());
+
+        // 3. Start the CGI process
         pid_t pid = handler->start();
         client.cgi_input_fd = handler->getStdinWriteFd();
         client.cgi_output_fd = handler->getStdoutReadFd();
