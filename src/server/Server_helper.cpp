@@ -71,7 +71,7 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			waitpid(handler->getChildPid(), &status, 0); 
 
 			// Check exit status
-			if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
 			{
 				Logger::error("CGI process exited with error status: {}", WEXITSTATUS(status));
 				client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
