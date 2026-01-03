@@ -5,6 +5,8 @@
 #include <cstring>
 #include <sys/stat.h>
 
+namespace wsv
+{
 // Friend class to access private members of CgiHandler
 class CgiHandlerTestable {
 public:
@@ -113,6 +115,51 @@ void test_pipe_management(TestRunner& runner) {
     }
 }
 
+void test_empty_input(TestRunner& runner) {
+    runner.startTest("CgiHandler Empty Input");
+    try {
+        CgiHandler h("/bin/echo", "test");
+        h.setInput("");
+        pid_t pid = h.start();
+        if (pid <= 0) runner.fail("Failed to start with empty input");
+        h.closePipes();
+        runner.pass();
+    } catch (const std::exception& e) {
+        runner.fail(e.what());
+    }
+}
+
+void test_timeout_config(TestRunner& runner) {
+    runner.startTest("CgiHandler Timeout Configuration");
+    try {
+        CgiHandler h("/bin/echo", "test");
+        h.setTimeout(5);
+        CgiHandler h2;
+        h2.setTimeout(10);
+        runner.pass();
+    } catch (const std::exception& e) {
+        runner.fail(e.what());
+    }
+}
+
+void test_large_input(TestRunner& runner) {
+    runner.startTest("CgiHandler Large Input (5MB)");
+    try {
+        CgiHandler h("/bin/cat", "test");
+        // 5MB input - within limit, reflects real POST body uploads
+        std::string large_input(5 * 1024 * 1024, 'A');
+        h.setInput(large_input);
+        pid_t pid = h.start();
+        if (pid <= 0) runner.fail("Failed to start with large input");
+        h.closePipes();
+        runner.pass();
+    } catch (const std::exception& e) {
+        runner.fail(e.what());
+    }
+}
+
+} // namespace wsv
+
 int main() {
     std::cout << BOLD << "========================================" << RESET << std::endl;
     std::cout << BOLD << "  CgiHandler Unit Tests" << RESET << std::endl;
@@ -120,9 +167,12 @@ int main() {
 
     TestRunner runner;
 
-    test_constructors(runner);
-    test_environment_vars(runner);
-    test_pipe_management(runner);
+    wsv::test_constructors(runner);
+    wsv::test_environment_vars(runner);
+    wsv::test_pipe_management(runner);
+    wsv::test_empty_input(runner);
+    wsv::test_timeout_config(runner);
+    wsv::test_large_input(runner);
 
     runner.summary();
     return runner.allPassed() ? 0 : 1;

@@ -1,6 +1,5 @@
 import http.client
 import sys
-import time
 
 def colored(text, color):
     colors = {'green': '\033[92m', 'red': '\033[91m', 'reset': '\033[0m'}

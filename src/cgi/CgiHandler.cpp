@@ -10,6 +10,9 @@
 #include <cstdlib>
 #include <vector>
 
+namespace wsv
+{
+
 // ========================================
 // _PipeSet Implementation
 // ========================================
@@ -289,3 +292,5 @@ void CgiHandler::_executeCGIScript(_EnvironmentBuilder& env)
 
     execve(_cgi_bin.c_str(), &argv[0], env._getEnvironmentArray());
 }
+
+} // namespace wsv

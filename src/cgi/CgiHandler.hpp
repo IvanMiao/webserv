@@ -7,13 +7,16 @@
 #include <stdexcept>
 #include <sys/types.h>
 
+namespace wsv
+{
+
 /**
  * CgiHandler - Executes CGI scripts following CGI/1.1 specification
  * Refactored for non-blocking I/O
  */
 class CgiHandler
 {
-    friend class CgiHandlerTestable;
+    friend class CgiHandlerTestable;  // JUST for test, no use in runtime
 
 public:
     // Type Definitions
@@ -48,15 +51,13 @@ public:
     class WriteFailed : public std::runtime_error 
     {
     public:
-        WriteFailed(const std::string& msg = "Failed to write to CGI stdin") 
-            : std::runtime_error(msg) {}
+        WriteFailed() : std::runtime_error("Failed to write to CGI stdin") {}
     };
     
     class ReadingFailed : public std::runtime_error 
     {
     public:
-        ReadingFailed(const std::string& msg = "Failed to read from CGI stdout") 
-            : std::runtime_error(msg) {}
+        ReadingFailed() : std::runtime_error("Failed to read from CGI stdout") {}
     };
     
     class OutputTooLarge : public std::runtime_error 
@@ -80,14 +81,14 @@ public:
     void setTimeout(unsigned int seconds);
 
     // Getters
-    std::string getCGIBin() const { return _cgi_bin; };
-    std::string getScriptPath() const { return _script_path; };
-    HeaderMap getEnvironment() const { return _environment; };
-    std::string getInput() const { return _input; };
+    std::string getCGIBin() const { return _cgi_bin; }
+    std::string getScriptPath() const { return _script_path; }
+    HeaderMap getEnvironment() const { return _environment; }
+    std::string getInput() const { return _input; }
 
-    int getStdinWriteFd() const { return _pipes.input_pipe[1]; };
-    int getStdoutReadFd() const { return _pipes.output_pipe[0]; };
-    pid_t getChildPid() const { return _child_pid; };
+    int getStdinWriteFd() const { return _pipes.input_pipe[1]; }
+    int getStdoutReadFd() const { return _pipes.output_pipe[0]; }
+    pid_t getChildPid() const { return _child_pid; }
 
 
     // Helpers for parsing output after read is done
@@ -145,5 +146,7 @@ private:
     void _redirectChildIO(const _PipeSet& pipes);
     void _executeCGIScript(_EnvironmentBuilder& env);
 };
+
+} // namespace wsv
 
 #endif
