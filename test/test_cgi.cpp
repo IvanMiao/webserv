@@ -91,9 +91,8 @@ void test_pipe_management(TestRunner& runner) {
         // Initially pipes should be closed/invalid
         if (!t.arePipesClosed()) runner.fail("Pipes should be closed initially");
         
-        // start() creates pipes, forks, etc. 
-        // This is a "heavy" unit test, almost integration, but good for pipe logic check.
-        // We'll catch fork errors if system is overloaded, which is fine.
+        // for pipe logic check.
+        // We'll catch fork errors if system is overloaded
         try {
             pid_t pid = h.start();
             if (pid <= 0) runner.fail("Invalid PID returned");
@@ -104,7 +103,6 @@ void test_pipe_management(TestRunner& runner) {
             
             // Clean up
             h.closePipes();
-             // Just in case waitpid is needed, destructor handles it usually but we can force it
         } catch (const std::exception& e) {
             runner.fail(std::string("Start failed: ") + e.what());
         }

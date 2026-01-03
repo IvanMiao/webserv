@@ -112,11 +112,11 @@ CgiHandler::~CgiHandler()
     _pipes._closeAll();
     if (_child_pid > 0)
     {
+        // Non-blocking cleanup for async I/O architecture
+        // SIGKILL is sent immediately, and we use WNOHANG to avoid blocking
+        // The actual waitpid will be called by the Server's epoll handler
         kill(_child_pid, SIGKILL);
         waitpid(_child_pid, NULL, WNOHANG);
-        // [TODO] Better: waitpid without WNOHANG if we sent SIGKILL?
-        // or WNOHANG is fine because init will reap it if we die?
-        waitpid(_child_pid, NULL, 0); 
     }
 }
 

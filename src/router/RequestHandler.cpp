@@ -1,9 +1,4 @@
 #include "RequestHandler.hpp"
-#include "FileHandler.hpp"
-#include "UploadHandler.hpp"
-#include "CgiRequestHandler.hpp"
-#include "server/Client.hpp"
-#include "ErrorHandler.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -50,9 +45,7 @@ HttpResponse RequestHandler::handleRequest(Client& client)
     if (_isCgiRequest(file_path, *location_config))
     {
         if (!FileHandler::file_exists(file_path))
-        {
             return ErrorHandler::get_error_page(404, _config);
-        }
 
         // Start Async CGI
         CgiRequestHandler::startCgi(client, file_path, *location_config, _config);
@@ -143,11 +136,6 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
         return response;
     }
 
-    /*
-    if (_isCgiRequest(file_path, location_config))
-        return _execute_cgi(request, file_path, location_config);
-    */
-
     HttpResponse response = _serve_file(file_path);
     if (request.getMethod() == "HEAD")
         response.setBody("");
@@ -176,19 +164,6 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
 
     // Build file path
     std::string file_path = _buildFilePath(decoded_path, location_config);
-
-    /*
-    // CGI POST request
-    if (_isCgiRequest(file_path, location_config))
-    {
-        // Check if CGI script file exists before attempting execution
-        if (!FileHandler::file_exists(file_path))
-        {
-            return ErrorHandler::get_error_page(404, _config);  // Not Found
-        }
-        return _execute_cgi(request, file_path, location_config);
-    }
-    */
 
     // Other POST cases not allowed
     return ErrorHandler::get_error_page(405, _config);
@@ -291,17 +266,5 @@ HttpResponse RequestHandler::_serve_directory(const std::string& dir_path,
         return ErrorHandler::get_error_page(response.getStatus(), _config);
     return response;
 }
-
-/**
- * Execute CGI script
- */
-/*
-HttpResponse RequestHandler::_execute_cgi(const HttpRequest& request,
-                                          const std::string& file_path,
-                                          const LocationConfig& location_config)
-{
-    return CgiRequestHandler::execute_cgi(request, file_path, location_config, _config);
-}
-*/
 
 } // namespace wsv

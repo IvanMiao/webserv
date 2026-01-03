@@ -29,7 +29,7 @@ def make_request(idx):
 
 def main():
     threads = []
-    num_requests = 1000
+    num_requests = 100
     
     print(f"Starting {num_requests} concurrent requests...")
     start_time = time.time()

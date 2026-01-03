@@ -1,12 +1,18 @@
 #ifndef REQUEST_HANDLER_HPP
 #define REQUEST_HANDLER_HPP
 
-#include <string>
+#include "FileHandler.hpp"
+#include "UploadHandler.hpp"
+#include "CgiRequestHandler.hpp"
+#include "ErrorHandler.hpp"
+#include "server/Client.hpp"
 #include "http/HttpRequest.hpp"
 #include "http/HttpResponse.hpp"
 #include "config/ConfigParser.hpp"
 #include "utils/Logger.hpp"
 #include "utils/StringUtils.hpp"
+
+#include <string>
 
 namespace wsv
 {
@@ -120,17 +126,6 @@ private:
      */
     HttpResponse _serve_directory(const std::string& dir_path,
                                    const LocationConfig& location_config);
-
-    /**
-     * Execute CGI script
-     * @param request HTTP request
-     * @param file_path Filesystem path to CGI script
-     * @param location_config Location configuration
-     * @return HttpResponse from CGI execution
-     */
-    //HttpResponse _execute_cgi(const HttpRequest& request,
-    //                          const std::string& file_path,
-    //                          const LocationConfig& location_config);
 };
 
 } // namespace wsv
