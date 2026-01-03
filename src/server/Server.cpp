@@ -15,9 +15,8 @@ _config(config), _epoll_fd(-1)
 {
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGINT, Server::signalHandler);
-	// Reap child processes automatically without blocking
-	// This ensures CGI processes don't become zombies
-	signal(SIGCHLD, SIG_DFL);  // Default handler reaps children
+	// Default behavior: children remain zombies until waitpid is called
+	signal(SIGCHLD, SIG_DFL);
 	_shutdown_requested = 0;
 }
 
