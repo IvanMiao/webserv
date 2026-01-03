@@ -16,6 +16,7 @@ class LocationConfig
 public:
 	std::string		path;
 	std::string		root;
+	std::string		alias;          // alias directive (takes precedence over root)
 	std::vector<std::string>	allow_methods; // allowed HTTP methods
 	std::string		index;
 	bool			autoindex;

@@ -11,6 +11,7 @@ namespace wsv
 LocationConfig::LocationConfig() 
 	: path("/") 
 	, root("") 
+	, alias("")
 	, index("index.html") 
 	, autoindex(false) 
 	, redirect_code(0) 
@@ -255,6 +256,13 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 			std::string value = line.substr(4);
 			value = StringUtils::trim(value);
 			location.root = StringUtils::removeSemicolon(value);
+		}
+		// alias /var/www/uploads;
+		else if (StringUtils::startsWith(line, "alias"))
+		{
+			std::string value = line.substr(5);
+			value = StringUtils::trim(value);
+			location.alias = StringUtils::removeSemicolon(value);
 		}
 		// allow_methods GET POST DELETE;
 		else if (StringUtils::startsWith(line, "allow_methods") || 

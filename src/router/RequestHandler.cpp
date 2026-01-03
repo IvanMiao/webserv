@@ -217,31 +217,45 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
 
 /**
  * Convert URI path to filesystem path
- * Uses Nginx 'alias' directive semantics: root + (URI - location_path)
- * Example: location /uploads rooted to ./www/site_8080/uploads, URI /uploads/file.txt
- *          -> ./www/site_8080/uploads/file.txt
+ * 
+ * Two modes:
+ * 1. If 'alias' is defined: Use alias semantics (remove location prefix from URI)
+ *    Example: location /uploads { alias ./www/site_8080/uploads; }
+ *    Request: /uploads/file.txt -> ./www/site_8080/uploads/file.txt
+ * 
+ * 2. If only 'root' is defined: Use root semantics (append full URI to root)
+ *    Example: location / { root ./www; }
+ *    Request: /index.html -> ./www/index.html
+ * 
  * Note: uri_path is expected to already be URL-decoded by handleRequest()
  */
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
-    // Remove location prefix from URI path to implement alias semantics
-    std::string relative_path = uri_path;
-    const std::string& location_path = location_config.path;
-    
-    // If URI starts with location path, remove that prefix
-    if (uri_path.find(location_path) == 0)
+    // Prefer alias over root if both are defined
+    if (!location_config.alias.empty())
     {
-        relative_path = uri_path.substr(location_path.length());
+        // Alias semantics: remove location prefix from URI
+        std::string relative_path = uri_path;
+        const std::string& location_path = location_config.path;
         
-        // Ensure path starts with /
-        if (relative_path.empty())
-            relative_path = "/";
-        else if (relative_path[0] != '/')
-            relative_path = "/" + relative_path;
+        // If URI starts with location path, remove that prefix
+        if (uri_path.find(location_path) == 0)
+        {
+            relative_path = uri_path.substr(location_path.length());
+            
+            // Ensure path starts with /
+            if (relative_path.empty())
+                relative_path = "/";
+            else if (relative_path[0] != '/')
+                relative_path = "/" + relative_path;
+        }
+        
+        return location_config.alias + relative_path;
     }
     
-    return location_config.root + relative_path;
+    // Root semantics: append full URI to root
+    return location_config.root + uri_path;
 }
 
 
