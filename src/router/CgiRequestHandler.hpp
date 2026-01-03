@@ -9,6 +9,7 @@
 
 namespace wsv
 {
+class Client;
 
 /**
  * CgiRequestHandler - Handles execution of CGI scripts
@@ -22,17 +23,18 @@ class CgiRequestHandler
 {
 public:
     /**
-     * Execute a CGI script and return the HTTP response
-     * @param request The parsed HTTP request
+     * Start async CGI execution
+     * @param client Client object 
      * @param script_path Filesystem path to CGI script
-     * @param location_config Location-specific configuration
-     * @param server_config Server-wide configuration
-     * @return HttpResponse generated from CGI output
+     * @param location_config Location configuration
+     * @param server_config Server configuration
      */
-    static HttpResponse execute_cgi(const HttpRequest& request,
-                                    const std::string& script_path,
-                                    const LocationConfig& location_config,
-                                    const ServerConfig& server_config);
+    static void startCgi(Client& client,
+                         const std::string& script_path,
+                         const LocationConfig& location_config,
+                         const ServerConfig& server_config);
+
+
 
 private:
     // ========================================
@@ -49,39 +51,10 @@ private:
      */
     static std::map<std::string, std::string> _build_cgi_environment(
         const HttpRequest& request,
+        const std::string& script_path,
         const LocationConfig& location_config,
         const ServerConfig& server_config
     );
-
-    /**
-     * Run the CGI script using fork/exec and capture its output
-     * @param env_vars Environment variables for CGI
-     * @param script_path Path to the CGI script
-     * @param input Optional input for CGI stdin
-     * @return CGI output as string
-     */
-    static std::string _execute_cgi_script(
-        const std::map<std::string, std::string>& env_vars,
-        const std::string& script_path,
-        const std::string& input = ""
-    );
-
-    /**
-     * Parse CGI output into headers and body
-     * @param cgi_output Raw output from CGI script
-     * @param headers Output map of headers
-     * @param body Output body content
-     */
-    static void _parse_cgi_output(
-        const std::string& cgi_output,
-        std::map<std::string, std::string>& headers,
-        std::string& body
-    );
-
-    // ========================================
-    // Private Member Variables (if any)
-    // ========================================
-    // (Currently, CgiRequestHandler is fully static, so no instance variables)
 };
 
 } // namespace wsv

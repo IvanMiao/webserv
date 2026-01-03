@@ -1,15 +1,22 @@
 #ifndef REQUEST_HANDLER_HPP
 #define REQUEST_HANDLER_HPP
 
-#include <string>
+#include "FileHandler.hpp"
+#include "UploadHandler.hpp"
+#include "CgiRequestHandler.hpp"
+#include "ErrorHandler.hpp"
+#include "server/Client.hpp"
 #include "http/HttpRequest.hpp"
 #include "http/HttpResponse.hpp"
 #include "config/ConfigParser.hpp"
 #include "utils/Logger.hpp"
 #include "utils/StringUtils.hpp"
 
+#include <string>
+
 namespace wsv
 {
+class Client;
 
 /**
  * RequestHandler - Main HTTP request processing class
@@ -31,12 +38,18 @@ public:
     ~RequestHandler();
 
     /**
-     * Main entry point for request processing
-     * Routes requests based on HTTP method, location, and file type
+     * Main entry point for request processing (Legacy/Test)
      * @param request Parsed HTTP request
      * @return HttpResponse generated for the request
      */
     HttpResponse handleRequest(const HttpRequest& request);
+
+    /**
+     * Main entry point for request processing (Async/CGI aware)
+     * @param client The client object
+     * @return HttpResponse (may be empty if async started)
+     */
+    HttpResponse handleRequest(Client& client);
 
 private:
     // ========================================
@@ -89,13 +102,14 @@ private:
     std::string _buildFilePath(const std::string& uri_path,
                                const LocationConfig& location_config);
 
+
     /**
      * Check if the given path corresponds to a CGI script
      * @param file_path Full filesystem path
      * @param location_config Location configuration
      * @return true if the file should be handled via CGI
      */
-    // bool _isCgiRequest(const std::string& file_path, const LocationConfig& location_config) const;
+    bool _isCgiRequest(const std::string& file_path, const LocationConfig& location_config) const;
 
     /**
      * Serve a static file
@@ -112,17 +126,6 @@ private:
      */
     HttpResponse _serve_directory(const std::string& dir_path,
                                    const LocationConfig& location_config);
-
-    /**
-     * Execute CGI script
-     * @param request HTTP request
-     * @param file_path Filesystem path to CGI script
-     * @param location_config Location configuration
-     * @return HttpResponse from CGI execution
-     */
-    //HttpResponse _execute_cgi(const HttpRequest& request,
-    //                          const std::string& file_path,
-    //                          const LocationConfig& location_config);
 };
 
 } // namespace wsv

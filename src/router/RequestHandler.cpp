@@ -1,8 +1,4 @@
 #include "RequestHandler.hpp"
-#include "FileHandler.hpp"
-#include "UploadHandler.hpp"
-// #include "CgiRequestHandler.hpp"
-#include "ErrorHandler.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -24,6 +20,44 @@ RequestHandler::~RequestHandler()
  * Main entry point to process HTTP request
  * Routes request to appropriate handler based on method and location config
  */
+HttpResponse RequestHandler::handleRequest(Client& client)
+{
+    const HttpRequest& request = client.request;
+    std::string method = request.getMethod();
+    std::string decoded_path = StringUtils::urlDecode(request.getPath());
+
+    // Basic validation for CGI check
+    // Note: We duplicate some checks here to find the LocationConfig and FilePath
+    // This is necessary to determine if it is a CGI request safely.
+    
+    if (decoded_path.find("..") != std::string::npos)
+        return ErrorHandler::get_error_page(403, _config);
+
+    const LocationConfig* location_config = _config.findLocation(decoded_path);
+    if (!location_config)
+        return ErrorHandler::get_error_page(404, _config);
+
+    if (!location_config->isMethodAllowed(method))
+        return ErrorHandler::get_error_page(405, _config);
+
+    // Check CGI
+    std::string file_path = _buildFilePath(decoded_path, *location_config);
+    if (_isCgiRequest(file_path, *location_config))
+    {
+        if (!FileHandler::file_exists(file_path))
+            return ErrorHandler::get_error_page(404, _config);
+
+        // Start Async CGI
+        CgiRequestHandler::startCgi(client, file_path, *location_config, _config);
+        
+        // Return placeholder. Server will check client.state
+        return HttpResponse(); 
+    }
+
+    // Fallback to standard synchronous processing
+    return handleRequest(request);
+}
+
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
     Logger::debug("START handleRequest");
@@ -102,11 +136,6 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
         return response;
     }
 
-    /*
-    if (_isCgiRequest(file_path, location_config))
-        return _execute_cgi(request, file_path, location_config);
-    */
-
     HttpResponse response = _serve_file(file_path);
     if (request.getMethod() == "HEAD")
         response.setBody("");
@@ -135,19 +164,6 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
 
     // Build file path
     std::string file_path = _buildFilePath(decoded_path, location_config);
-
-    /*
-    // CGI POST request
-    if (_isCgiRequest(file_path, location_config))
-    {
-        // Check if CGI script file exists before attempting execution
-        if (!FileHandler::file_exists(file_path))
-        {
-            return ErrorHandler::get_error_page(404, _config);  // Not Found
-        }
-        return _execute_cgi(request, file_path, location_config);
-    }
-    */
 
     // Other POST cases not allowed
     return ErrorHandler::get_error_page(405, _config);
@@ -214,7 +230,6 @@ std::string RequestHandler::_buildFilePath(const std::string& uri_path,
 
 
 // Check if file is a CGI script based on configured extension
-/*
 bool RequestHandler::_isCgiRequest(const std::string& file_path,
                                    const LocationConfig& location_config) const
 {
@@ -228,7 +243,6 @@ bool RequestHandler::_isCgiRequest(const std::string& file_path,
     std::string ext = file_path.substr(ext_pos);
     return (ext == location_config.cgi_extension);
 }
-*/
 
 /**
  * Serve static file
@@ -252,17 +266,5 @@ HttpResponse RequestHandler::_serve_directory(const std::string& dir_path,
         return ErrorHandler::get_error_page(response.getStatus(), _config);
     return response;
 }
-
-/**
- * Execute CGI script
- */
-/*
-HttpResponse RequestHandler::_execute_cgi(const HttpRequest& request,
-                                          const std::string& file_path,
-                                          const LocationConfig& location_config)
-{
-    return CgiRequestHandler::execute_cgi(request, file_path, location_config, _config);
-}
-*/
 
 } // namespace wsv

@@ -5,11 +5,19 @@ INCLUDE	:= -I src -I src/server -I src/config -I src/utils -I src/router -I src/
 
 SRC_FILES	:= main.cpp \
 				config/ConfigParser.cpp \
-				server/Server.cpp server/Client.cpp \
-				http/HttpRequest.cpp http/HttpResponse.cpp \
-				router/RequestHandler.cpp router/FileHandler.cpp \
-				router/ErrorHandler.cpp router/UploadHandler.cpp \
-				utils/Logger.cpp utils/StringUtils.cpp
+				server/Server.cpp \
+				server/Server_helper.cpp \
+				server/Client.cpp \
+				http/HttpRequest.cpp \
+				http/HttpResponse.cpp \
+				router/RequestHandler.cpp \
+				router/FileHandler.cpp \
+				router/CgiRequestHandler.cpp \
+				router/UploadHandler.cpp \
+				router/ErrorHandler.cpp \
+				utils/Logger.cpp \
+				utils/StringUtils.cpp \
+				cgi/CgiHandler.cpp
 
 SRC_DIR	:= src
 SRC		:= $(addprefix $(SRC_DIR)/, $(SRC_FILES))

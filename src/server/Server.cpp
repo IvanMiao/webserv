@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <sys/wait.h>
 
 namespace wsv
 {
@@ -14,6 +15,8 @@ _config(config), _epoll_fd(-1)
 {
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGINT, Server::signalHandler);
+	// Default behavior: children remain zombies until waitpid is called
+	signal(SIGCHLD, SIG_DFL);
 	_shutdown_requested = 0;
 }
 
@@ -64,9 +67,7 @@ void Server::cleanup()
 void Server::signalHandler(int signum)
 {
 	if (signum == SIGINT)
-	{
 		_shutdown_requested = 1;
-	}
 }
 
 /**
@@ -106,6 +107,8 @@ void Server::start()
 
 			if (_listen_fds.find(current_fd) != _listen_fds.end())
 				_handle_new_connection(current_fd);
+			else if (_cgi_fd_map.find(current_fd) != _cgi_fd_map.end())
+				_handle_cgi_data(current_fd, events_flag);
 			else
 			{
 				// Read first, then handle Write
@@ -119,8 +122,6 @@ void Server::start()
 	}
 
 	Logger::info("Shutdown signal received. Cleaning up...");
-	// [TODO] Should we add cleanup() again in the start function?
-	// cleanup();
 }
 
 
@@ -164,6 +165,12 @@ int Server::_create_listening_socket(const std::string& host, int port)
 		throw std::runtime_error("Cannot set socket to non-blocking");
 	}
 
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+	{
+		close(fd);
+		throw std::runtime_error("Cannot set socket to FD_CLOEXEC");
+	}
+
 	struct addrinfo hints = {};
 	struct addrinfo *res;
 	hints.ai_family = AF_INET;
@@ -200,6 +207,12 @@ void Server::_init_epoll()
 	if (_epoll_fd < 0)
 		throw std::runtime_error("epoll_create failed");
 
+	if (fcntl(_epoll_fd, F_SETFD, FD_CLOEXEC) == -1)
+	{
+		close(_epoll_fd);
+		throw std::runtime_error("Cannot set epoll fd to FD_CLOEXEC");
+	}
+
 	for (std::map<int, ServerConfig>::iterator it = _listen_fds.begin(); it != _listen_fds.end(); ++it)
 	{
 		_add_to_epoll(it->first, EPOLLIN);
@@ -226,6 +239,19 @@ void Server::_modify_epoll(int fd, uint32_t events)
 		throw std::runtime_error("epoll_ctl mod failed");
 }
 
+void Server::_remove_from_epoll(int fd)
+{
+	if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0)
+	{
+		// ENOENT = FD was not in epoll (benign if we just want to ensure removal)
+		// EBADF = FD invalid or closed (benign if closed elsewhere)
+		if (errno == ENOENT || errno == EBADF)
+			Logger::debug("epoll_ctl del skipped (benign): fd {} not in epoll or invalid", fd);
+		else
+			Logger::error("epoll_ctl del failed for fd {}", fd);
+	}
+}
+
 // create Client
 void Server::_handle_new_connection(int listen_fd)
 {
@@ -241,6 +267,7 @@ void Server::_handle_new_connection(int listen_fd)
 
 	int flags = fcntl(client_fd, F_GETFL, 0);
 	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+	fcntl(client_fd, F_SETFD, FD_CLOEXEC);
 
 	// Get the ServerConfig for this listening port
 	const ServerConfig* config = &_listen_fds[listen_fd];
@@ -272,6 +299,7 @@ void Server::_handle_client_data(int client_fd)
 			std::string response = HttpResponse::createErrorResponse(400).serialize();
 			client.response_buffer = response;
 			client.keep_alive = false; // Close connection on error
+			client.state = CLIENT_WRITING_RESPONSE;
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 			return;
 		}
@@ -292,12 +320,15 @@ void Server::_handle_client_data(int client_fd)
 				client.keep_alive = false;
 			}
 			
-			// 1. Handle request, generate response 
-			std::string response = _process_request(client_fd, client.request);
-			// 2. Save the response to Client's response_buffer
-			client.response_buffer = response;
-			// 3. modify epoll to care about EPOLLOUT(write)
-			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+			// 1. Handle request (Async or Sync)
+			_process_request(client_fd);
+
+			// If state became WRITING_RESPONSE, enable write event
+			// If state is CGI_PROCESSING, _process_request disabled events already
+			if (client.state == CLIENT_WRITING_RESPONSE)
+			{
+				_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+			}
 		}
 	}
 	else if (bytes_read == 0)
@@ -317,6 +348,13 @@ void Server::_handle_client_write(int client_fd)
 {
 	Client& client = _clients[client_fd];
 	std::string& buffer = client.response_buffer;
+
+	// Only write to client when explicitly in the WRITING_RESPONSE state
+	// This prevents writing raw CGI stdout (which is temporarily stored in
+	// client.response_buffer while a CGI is running) before the CGI output is
+	// parsed and converted into a full HTTP response.
+	if (client.state != CLIENT_WRITING_RESPONSE)
+		return;
 
 	if (buffer.empty())
 		return;
@@ -359,7 +397,7 @@ void Server::_handle_client_write(int client_fd)
 /*
 	Process request using RequestHandler
 */
-std::string Server::_process_request(int client_fd, const HttpRequest& request)
+void Server::_process_request(int client_fd)
 {
 	Logger::info("Request received, preparing to send response...");
 	Client& client = _clients[client_fd];
@@ -368,13 +406,40 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 	if (!config)
 	{
 		Logger::error("No server config found for client FD {}", client_fd);
-		return HttpResponse::createErrorResponse(500).serialize();
+		client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
+		client.state = CLIENT_WRITING_RESPONSE;
+		return;
 	}
 
 	// Create RequestHandler and process the request
 	RequestHandler handler(*config);
-	HttpResponse response = handler.handleRequest(request);
 	
+	// Handles CGI start internally. Checks client.state for async changes.
+	HttpResponse response = handler.handleRequest(client);
+	
+	if (client.state == CLIENT_CGI_PROCESSING)
+	{
+		Logger::info("Async CGI started for client FD {}", client_fd);
+		
+		// Register CGI pipes to epoll
+		if (client.cgi_input_fd != -1)
+		{
+			_add_to_epoll(client.cgi_input_fd, EPOLLOUT);
+			_cgi_fd_map[client.cgi_input_fd] = client_fd;
+		}
+		if (client.cgi_output_fd != -1)
+		{
+			_add_to_epoll(client.cgi_output_fd, EPOLLIN);
+			_cgi_fd_map[client.cgi_output_fd] = client_fd;
+		}
+
+		// Disable client socket events while waiting for CGI
+		// We don't want to read more requests or write anything yet
+		_modify_epoll(client_fd, 0);
+		return;
+	}
+
+	// Normal synchronous response
 	// Set Connection header based on keep-alive status
 	if (client.keep_alive)
 		response.setHeader("Connection", "keep-alive");
@@ -382,9 +447,10 @@ std::string Server::_process_request(int client_fd, const HttpRequest& request)
 		response.setHeader("Connection", "close");
 	
 	Logger::info("Response built - Status: {}, Request: {} {}",
-				response.getStatus(), request.getMethod(), request.getPath());
+				response.getStatus(), client.request.getMethod(), client.request.getPath());
 	
-	return response.serialize();
+	client.response_buffer = response.serialize();
+	client.state = CLIENT_WRITING_RESPONSE;
 }
 
 /*
@@ -422,8 +488,55 @@ void Server::_check_client_timeouts()
 	
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
 	{
-		long idle_time = it->second.getIdleTime();
-		long timeout = it->second.keep_alive ? KEEP_ALIVE_TIMEOUT : CLIENT_IDLE_TIMEOUT;
+		Client& client = it->second;
+		long idle_time = client.getIdleTime();
+
+		// CGI timeout handling - parent process enforced
+		if (client.state == CLIENT_CGI_PROCESSING)
+		{
+			if (idle_time > CGI_TIMEOUT)
+			{
+				Logger::error("CGI timeout for client FD {} after {} seconds", it->first, idle_time);
+				
+				// Forcibly kill the CGI child process
+				if (client.cgi_handler && client.cgi_handler->getChildPid() > 0)
+				{
+					kill(client.cgi_handler->getChildPid(), SIGKILL);
+					waitpid(client.cgi_handler->getChildPid(), NULL, WNOHANG);
+				}
+				
+				// Clean up CGI pipe FDs
+				if (client.cgi_input_fd != -1)
+				{
+					_remove_from_epoll(client.cgi_input_fd);
+					_cgi_fd_map.erase(client.cgi_input_fd);
+					close(client.cgi_input_fd);
+					client.cgi_input_fd = -1;
+				}
+				if (client.cgi_output_fd != -1)
+				{
+					_remove_from_epoll(client.cgi_output_fd);
+					_cgi_fd_map.erase(client.cgi_output_fd);
+					close(client.cgi_output_fd);
+					client.cgi_output_fd = -1;
+				}
+				
+				// Clean up CGI handler
+				delete client.cgi_handler;
+				client.cgi_handler = NULL;
+				
+				// Send 504 Gateway Timeout response
+				client.response_buffer = HttpResponse::createErrorResponse(504).serialize();
+				client.state = CLIENT_WRITING_RESPONSE;
+				client.keep_alive = false; // Close connection after timeout
+				_modify_epoll(it->first, EPOLLIN | EPOLLOUT);
+			}
+			// Don't check regular idle timeout while CGI is processing
+			continue;
+		}
+		
+		// Regular client idle timeout
+		long timeout = client.keep_alive ? KEEP_ALIVE_TIMEOUT : CLIENT_IDLE_TIMEOUT;
 		
 		if (idle_time > timeout)
 		{
@@ -445,6 +558,27 @@ void Server::_check_client_timeouts()
 */
 void Server::_close_client(int client_fd)
 {
+	// Clean up CGI resources if active
+	if (_clients.find(client_fd) != _clients.end())
+	{
+		Client& client = _clients[client_fd];
+		if (client.cgi_input_fd != -1)
+		{
+			_remove_from_epoll(client.cgi_input_fd);
+			_cgi_fd_map.erase(client.cgi_input_fd);
+			close(client.cgi_input_fd); // CgiHandler destructor will also try, but good to be explicit
+			client.cgi_input_fd = -1;
+		}
+		if (client.cgi_output_fd != -1)
+		{
+			_remove_from_epoll(client.cgi_output_fd);
+			_cgi_fd_map.erase(client.cgi_output_fd);
+			close(client.cgi_output_fd);
+			client.cgi_output_fd = -1;
+		}
+		// CgiHandler is deleted in Client destructor, which is called when erasing from _clients map
+	}
+
 	epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
 	close(client_fd);
 	_clients.erase(client_fd);
