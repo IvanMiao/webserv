@@ -91,7 +91,7 @@ python3 test/test_cgi_concurrency.py
 *   **预期结果**: 静态文件请求应立即返回（< 0.1s），不受 CGI 脚本影响。
 
 #### C. 负载测试 (Load Tests)
-模拟并发发送 20+ 个 CGI 请求。
+模拟并发发送 100+ 个 CGI 请求。
 
 ```bash
 python3 test/test_cgi_load.py
