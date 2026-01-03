@@ -3,19 +3,20 @@ A Nginx-like webserv in C++
 
 ## TODO
 
-1. how to write a Nginx conf file? how many keywords/blocks... should we manage?
+1. WRITE_BUFFER, write, send
+
+2. 
+
+## Workflow
+
+1. write a Nginx conf file
 	- Main Context: `server`
 	- Server Context: `listen`(port), `host`(host IP), `error_page` (code + route), `client_max_body_size`
 	- Location Context: `allow_methods`, `root`, `index` (default index), `return`(redirection), CGI conf
 
-2. how to initialize a server
+2. choose `epoll`
 
-3. choose `poll` or `epoll`?
-
-4. a Logger? (DEBUG, INFO, ERROR)
-	- a simple singleton class
-
-5. HTTP Request & Response specification?
+3. HTTP Request & Response specification
 	- [RFC 7230](https://datatracker.ietf.org/doc/html/rfc7230)
 	- [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231)
 	- state-machine based parser to handle chunked transfer encoding and partial requests

@@ -68,9 +68,7 @@ void Server::cleanup()
 void Server::signalHandler(int signum)
 {
 	if (signum == SIGINT)
-	{
 		_shutdown_requested = 1;
-	}
 }
 
 /**
@@ -111,9 +109,7 @@ void Server::start()
 			if (_listen_fds.find(current_fd) != _listen_fds.end())
 				_handle_new_connection(current_fd);
 			else if (_cgi_fd_map.find(current_fd) != _cgi_fd_map.end())
-			{
 				_handle_cgi_data(current_fd, events_flag);
-			}
 			else
 			{
 				// Read first, then handle Write
@@ -127,8 +123,6 @@ void Server::start()
 	}
 
 	Logger::info("Shutdown signal received. Cleaning up...");
-	// [TODO] Should we add cleanup() again in the start function?
-	// cleanup();
 }
 
 
@@ -429,11 +423,13 @@ void Server::_process_request(int client_fd)
 		Logger::info("Async CGI started for client FD {}", client_fd);
 		
 		// Register CGI pipes to epoll
-		if (client.cgi_input_fd != -1) {
+		if (client.cgi_input_fd != -1)
+		{
 			_add_to_epoll(client.cgi_input_fd, EPOLLOUT);
 			_cgi_fd_map[client.cgi_input_fd] = client_fd;
 		}
-		if (client.cgi_output_fd != -1) {
+		if (client.cgi_output_fd != -1)
+		{
 			_add_to_epoll(client.cgi_output_fd, EPOLLIN);
 			_cgi_fd_map[client.cgi_output_fd] = client_fd;
 		}

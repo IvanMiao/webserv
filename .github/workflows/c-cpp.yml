@@ -2,7 +2,7 @@ name: C++ Werbserv CI
 
 on:
   push:
-    branches: [ "main", "migrate-http" ]
+    branches: [ "main", "migrate-cgi" ]
   pull_request:
     branches: [ "main" ]
 

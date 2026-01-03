@@ -23,7 +23,8 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 	}
 
 	CgiHandler* handler = client.cgi_handler;
-	if (!handler) {
+	if (!handler)
+	{
 		Logger::error("CGI handler missing for client {}", client_fd);
 		return;
 	}
@@ -59,9 +60,7 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 		ssize_t bytes = read(cgi_fd, buffer, sizeof(buffer));
 
 		if (bytes > 0)
-		{
 			client.response_buffer.append(buffer, bytes);
-		}
 		else if (bytes == 0 || (events & EPOLLHUP))
 		{
 			// CGI finished
@@ -130,10 +129,9 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			// Re-enable client socket
 			_modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
 		}
-		else
+		else // Handle error... return 500
 		{
 			Logger::error("Read error from CGI stdout");
-			// Handle error... return 500
 			_remove_from_epoll(cgi_fd);
 			close(cgi_fd);
 			_cgi_fd_map.erase(cgi_fd);
