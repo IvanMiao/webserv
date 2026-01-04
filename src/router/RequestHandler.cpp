@@ -44,7 +44,9 @@ HttpResponse RequestHandler::handleRequest(Client& client)
     std::string file_path = _buildFilePath(decoded_path, *location_config);
     if (_isCgiRequest(file_path, *location_config))
     {
-        if (!FileHandler::file_exists(file_path))
+        // For GET/HEAD requests, the CGI script file must exist
+        // For POST requests, the target file doesn't need to exist (upload/creation scenario)
+        if ((method == "GET" || method == "HEAD") && !FileHandler::file_exists(file_path))
             return ErrorHandler::get_error_page(404, _config);
 
         // Start Async CGI
@@ -59,59 +61,6 @@ HttpResponse RequestHandler::handleRequest(Client& client)
 }
 
     
-// HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
-// {
-//     Logger::debug("START handleRequest");
-//     std::string method = request.getMethod();
-//     Logger::debug("URI = {}, Method = {}", request.getPath(), method);
-    
-//     // SECURITY: Decode URL BEFORE path traversal check
-//     // This prevents bypass via encoded sequences like %2e%2e%2f (../)
-//     std::string decoded_path = StringUtils::urlDecode(request.getPath());
-    
-//     // Check for path traversal attacks BEFORE other validations
-//     // This ensures 403 is returned for traversal attempts, not 405
-//     if (decoded_path.find("..") != std::string::npos)
-//     {
-//         Logger::debug("Path traversal detected in decoded path, returning 403");
-//         return ErrorHandler::get_error_page(403, _config);
-//     }
-    
-//     const LocationConfig* location_config = _config.findLocation(decoded_path);
-
-//     if (!location_config)
-//         return ErrorHandler::get_error_page(404, _config);
-
-//     if (!location_config->isMethodAllowed(method))
-//     {
-//         Logger::debug("Method not allowed: {}", method);
-//         return ErrorHandler::get_error_page(405, _config);
-//     }
-
-//     if (location_config->hasRedirect())
-//     {
-//         return HttpResponse::createRedirectResponse(
-//             location_config->redirect_code,
-//             location_config->redirect_url
-//         );
-//     }
-
-//     if (request.getContentLength() > _config.client_max_body_size)
-//         return ErrorHandler::get_error_page(413, _config);
-
-//     if (method == "GET" || method == "HEAD")
-//         return _handleGet(request, *location_config, decoded_path);
-//     else if (method == "POST")
-//     {
-//         Logger::debug("Routing to _handlePost");
-//         return _handlePost(request, *location_config, decoded_path);
-//     }
-//     else if (method == "DELETE")
-//         return _handleDelete(request, *location_config, decoded_path);
-
-//     return ErrorHandler::get_error_page(501, _config);
-// }
-
 // ============================================================================
 // Main Entry Point for Request Processing
 // ============================================================================
@@ -120,7 +69,7 @@ HttpResponse RequestHandler::handleRequest(Client& client)
 // 2. Location matching
 // 3. Method permissions
 // 4. Redirect rules
-// 5. Directory auto-redirect (NEW!)
+// 5. Directory auto-redirect
 // 6. Request size limits
 // ============================================================================
 
@@ -234,11 +183,11 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     // STEP 7: Request Body Size Check
     // ========================================================================
     size_t content_length = request.getContentLength();
-    if (content_length > _config.client_max_body_size)
+    if (content_length > location_config->client_max_body_size)
     {
         Logger::debug("ERROR: Request body too large");
         Logger::debug("  Size: {} bytes", content_length);
-        Logger::debug("  Limit: {} bytes", _config.client_max_body_size);
+        Logger::debug("  Limit: {} bytes", location_config->client_max_body_size);
         return ErrorHandler::get_error_page(413, _config);
     }
     
@@ -378,17 +327,17 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
     if (!FileHandler::file_exists(file_path))
         return ErrorHandler::get_error_page(404, _config);
 
-    // ========== 关键修复：目录自动重定向 ==========
+    // ========== Key Fix: Directory Auto-Redirect ==========
     if (FileHandler::is_directory(file_path))
     {
-        // 检查请求路径是否以 / 结尾
+        // Check if request path ends with /
         std::string uri = request.getPath();
         if (!uri.empty() && uri[uri.length() - 1] != '/')
         {
-            // 如果访问目录但没有尾部斜杠，重定向
+            // If accessing directory but no trailing slash, redirect
             std::string redirect_uri = uri + "/";
             
-            // 保留查询字符串
+            // Preserve query string
             if (!request.getQuery().empty())
             {
                 redirect_uri += "?" + request.getQuery();
@@ -397,7 +346,7 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
             return HttpResponse::createRedirectResponse(301, redirect_uri);
         }
         
-        // 有尾部斜杠，正常处理目录
+        // With trailing slash, handle directory normally
         HttpResponse response = _serve_directory(file_path, location_config);
         if (request.getMethod() == "HEAD")
             response.setBody("");
@@ -433,8 +382,13 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     // Build file path
     std::string file_path = _buildFilePath(decoded_path, location_config);
 
-    // Other POST cases not allowed
-    return ErrorHandler::get_error_page(405, _config);
+    // Non-upload, non-CGI POST: Return 200 OK (accepting the POST data)
+    // This handles cases like /post_body which just needs to accept POST requests
+    HttpResponse response;
+    response.setStatus(200);
+    response.setHeader("Content-Type", "text/plain");
+    response.setBody("POST request received\n");
+    return response;
 }
 
 /**
@@ -497,41 +451,12 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
  * 
  * Note: uri_path is expected to already be URL-decoded by handleRequest()
  */
-// std::string RequestHandler::_buildFilePath(const std::string& uri_path,
-//                                            const LocationConfig& location_config)
-// {
-//     // Prefer alias over root if both are defined
-//     if (!location_config.alias.empty())
-//     {
-//         // Alias semantics: remove location prefix from URI
-//         std::string relative_path = uri_path;
-//         const std::string& location_path = location_config.path;
-        
-//         // If URI starts with location path, remove that prefix
-//         if (uri_path.find(location_path) == 0)
-//         {
-//             relative_path = uri_path.substr(location_path.length());
-            
-//             // Ensure path starts with /
-//             if (relative_path.empty())
-//                 relative_path = "/";
-//             else if (relative_path[0] != '/')
-//                 relative_path = "/" + relative_path;
-//         }
-        
-//         return location_config.alias + relative_path;
-//     }
-    
-//     // Root semantics: append full URI to root
-//     return location_config.root + uri_path;
-// }
-
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
     std::string final_path;
 
-    // 打印初始信息
+    // Print initial information
     Logger::debug("--- Building File Path ---");
     Logger::debug("URI Path: '{}'", uri_path);
     Logger::debug("Location Path: '{}'", location_config.path);
@@ -564,8 +489,6 @@ std::string RequestHandler::_buildFilePath(const std::string& uri_path,
         Logger::debug("Using ROOT logic. Final: '{}'", final_path);
     }
 
-    // 检查是否有双斜杠 //
-    // 如果 final_path 中出现了 //，有些操作系统可能无法正确识别
     Logger::debug("Resulting Path: '{}'", final_path);
     Logger::debug("--------------------------");
 

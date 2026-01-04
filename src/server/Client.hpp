@@ -41,6 +41,7 @@ public:
 	CgiHandler* cgi_handler;	// Managed pointer to active CGI handler
 	int cgi_input_fd;			// Pipe to write request body to CGI stdin
 	int cgi_output_fd;			// Pipe to read response from CGI stdout
+	size_t cgi_write_offset;	// Track write progress for large POST bodies
 
 public:
 	Client();

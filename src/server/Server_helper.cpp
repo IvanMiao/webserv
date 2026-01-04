@@ -2,6 +2,8 @@
 #include <fstream>
 #include <sstream>
 #include <sys/wait.h>
+#include <cstring>
+#include <cerrno>
 
 namespace wsv {
 
@@ -32,25 +34,49 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 	// 1. Write to CGI Stdin (if this fd is input_fd)
 	if (cgi_fd == client.cgi_input_fd && (events & EPOLLOUT))
 	{
-		std::string input = handler->getInput();
-		ssize_t written = write(cgi_fd, input.c_str(), input.size());
+		const std::string& input = handler->getInput();
+		size_t remaining = input.size() - client.cgi_write_offset;
 		
-		if (written >= 0)
+		if (remaining == 0)
 		{
-			// Input written (or empty), close stdin to signal EOF to CGI
+			// All data written, close stdin to signal EOF to CGI
 			handler->closeStdin();
+			handler->markStdinClosed();
+			_remove_from_epoll(cgi_fd);
+			_cgi_fd_map.erase(cgi_fd);
+			client.cgi_input_fd = -1;
+			return;
+		}
+		
+		ssize_t written = write(cgi_fd, input.c_str() + client.cgi_write_offset, remaining);
+		
+		if (written > 0)
+		{
+			client.cgi_write_offset += written;
+			// Update activity to prevent timeout during large POST body writes
+			client.updateActivity();
+			
+			// Check if all data has been written
+			if (client.cgi_write_offset >= input.size())
+			{
+				handler->closeStdin();
+				handler->markStdinClosed();
+				_remove_from_epoll(cgi_fd);
+				_cgi_fd_map.erase(cgi_fd);
+				client.cgi_input_fd = -1;
+			}
+			// Otherwise, wait for next EPOLLOUT to continue writing
+		}
+		else if (written == 0 || (written == -1 && errno != EAGAIN && errno != EWOULDBLOCK))
+		{
+			Logger::error("Failed to write to CGI stdin: {}", strerror(errno));
+			handler->closeStdin();
+			handler->markStdinClosed();
 			_remove_from_epoll(cgi_fd);
 			_cgi_fd_map.erase(cgi_fd);
 			client.cgi_input_fd = -1;
 		}
-		else
-		{
-			Logger::error("Failed to write to CGI stdin");
-			handler->closeStdin();
-			_remove_from_epoll(cgi_fd);
-			_cgi_fd_map.erase(cgi_fd);
-			client.cgi_input_fd = -1;
-		}
+		// If EAGAIN/EWOULDBLOCK, just wait for next EPOLLOUT
 	}
 	
 	// 2. Read from CGI Stdout (if this fd is output_fd)
@@ -121,6 +147,8 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			close(cgi_fd);
 			_cgi_fd_map.erase(cgi_fd);
 			client.cgi_output_fd = -1;
+			if (client.cgi_handler)
+				client.cgi_handler->markStdoutClosed();  // Prevent double-close
 
 			// Cleanup handler
 			delete client.cgi_handler;
@@ -136,6 +164,12 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			close(cgi_fd);
 			_cgi_fd_map.erase(cgi_fd);
 			client.cgi_output_fd = -1;
+			if (client.cgi_handler)
+			{
+				client.cgi_handler->markStdoutClosed();
+				delete client.cgi_handler;
+				client.cgi_handler = NULL;
+			}
 			
 			client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
 			client.state = CLIENT_WRITING_RESPONSE;

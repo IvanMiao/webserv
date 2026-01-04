@@ -16,6 +16,7 @@ LocationConfig::LocationConfig()
 	, autoindex(false) 
 	, redirect_code(0) 
 	, upload_enable(false) 
+	, client_max_body_size(0)
 { 
 	allow_methods.push_back("GET"); 
 }
@@ -40,28 +41,28 @@ ServerConfig::ServerConfig()
 
 const LocationConfig* ServerConfig::findLocation(const std::string& uri) const
 {
-	// Step 1: 规范化路径（确保一致性）
+	// Step 1: Normalize the path (ensure consistency)
 	std::string normalized_uri = uri;
 	
-	// 如果路径以 / 结尾但不是根路径，移除尾部斜杠进行匹配
-	// 例如：/directory/ → /directory
+	// If the path ends with '/' and is not the root, remove the trailing slash for matching
+	// e.g., /directory/ -> /directory
 	if (normalized_uri.length() > 1 && 
 		normalized_uri[normalized_uri.length() - 1] == '/')
 	{
 		normalized_uri = normalized_uri.substr(0, normalized_uri.length() - 1);
 	}
 	
-	// Step 2: 精确匹配（优先级最高）
+	// Step 2: Exact match (highest priority)
 	for (size_t i = 0; i < locations.size(); ++i)
 	{
 		if (locations[i].path == normalized_uri || 
-			locations[i].path == uri)  // 也尝试原始 URI
+			locations[i].path == uri)  // also try the original URI
 		{
 			return &locations[i];
 		}
 	}
 	
-	// Step 3: 前缀匹配（按长度排序，最长匹配优先）
+	// Step 3: Prefix match (prefer the longest matching prefix)
 	const LocationConfig* best_match = NULL;
 	size_t best_match_length = 0;
 	
@@ -69,12 +70,12 @@ const LocationConfig* ServerConfig::findLocation(const std::string& uri) const
 	{
 		const std::string& loc_path = locations[i].path;
 		
-		// 检查是否是前缀匹配
+		// Check for prefix match
 		if (uri.find(loc_path) == 0)
 		{
-			// 确保匹配完整的路径段
-			// /directory/ 应该匹配 /directory/nop
-			// 但不应该匹配 /directoryabc
+			// Ensure matching a complete path segment
+			// /directory/ should match /directory/nop
+			// but should not match /directoryabc
 			
 			if (loc_path.length() == uri.length() ||
 				uri[loc_path.length()] == '/')
@@ -91,7 +92,7 @@ const LocationConfig* ServerConfig::findLocation(const std::string& uri) const
 	if (best_match)
 		return best_match;
 	
-	// Step 4: 返回默认 location (/)
+	// Step 4: Return the default location (/)
 	for (size_t i = 0; i < locations.size(); ++i)
 	{
 		if (locations[i].path == "/")
@@ -243,6 +244,8 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 									 ServerConfig& server)
 {
 	LocationConfig location;
+	// Inherit client_max_body_size from server
+	location.client_max_body_size = server.client_max_body_size;
 	
 	// Extract path: location /uploads {
 	std::string value = line.substr(8);  // Skip "location"
@@ -373,6 +376,14 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 			std::string value = line.substr(8);
 			value = StringUtils::trim(value);
 			location.cgi_path = StringUtils::removeSemicolon(value);
+		}
+		// client_max_body_size 100;
+		else if (StringUtils::startsWith(line, "client_max_body_size"))
+		{
+			std::string value = line.substr(20);
+			value = StringUtils::trim(value);
+			value = StringUtils::removeSemicolon(value);
+			location.client_max_body_size = StringUtils::parseSize(value);
 		}
 	}
 	

@@ -32,6 +32,7 @@ public:
 	// CGI
 	std::string	cgi_extension;  // .py, .php
 	std::string	cgi_path;       // CGI excutable path /usr/bin/python3
+	size_t		client_max_body_size; // Max body size for this location
 
 public:
 	LocationConfig();

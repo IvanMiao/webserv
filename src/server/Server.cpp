@@ -512,6 +512,8 @@ void Server::_check_client_timeouts()
 					_cgi_fd_map.erase(client.cgi_input_fd);
 					close(client.cgi_input_fd);
 					client.cgi_input_fd = -1;
+					if (client.cgi_handler)
+						client.cgi_handler->markStdinClosed();  // Prevent double-close in destructor
 				}
 				if (client.cgi_output_fd != -1)
 				{
@@ -519,6 +521,8 @@ void Server::_check_client_timeouts()
 					_cgi_fd_map.erase(client.cgi_output_fd);
 					close(client.cgi_output_fd);
 					client.cgi_output_fd = -1;
+					if (client.cgi_handler)
+						client.cgi_handler->markStdoutClosed();  // Prevent double-close in destructor
 				}
 				
 				// Clean up CGI handler
@@ -566,8 +570,10 @@ void Server::_close_client(int client_fd)
 		{
 			_remove_from_epoll(client.cgi_input_fd);
 			_cgi_fd_map.erase(client.cgi_input_fd);
-			close(client.cgi_input_fd); // CgiHandler destructor will also try, but good to be explicit
+			close(client.cgi_input_fd);
 			client.cgi_input_fd = -1;
+			if (client.cgi_handler)
+				client.cgi_handler->markStdinClosed();
 		}
 		if (client.cgi_output_fd != -1)
 		{
@@ -575,6 +581,8 @@ void Server::_close_client(int client_fd)
 			_cgi_fd_map.erase(client.cgi_output_fd);
 			close(client.cgi_output_fd);
 			client.cgi_output_fd = -1;
+			if (client.cgi_handler)
+				client.cgi_handler->markStdoutClosed();
 		}
 		// CgiHandler is deleted in Client destructor, which is called when erasing from _clients map
 	}
