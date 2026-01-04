@@ -38,38 +38,67 @@ ServerConfig::ServerConfig()
 	, client_max_body_size(1048576)
 { }
 
-const LocationConfig* ServerConfig::findLocation(const std::string& path) const
+const LocationConfig* ServerConfig::findLocation(const std::string& uri) const
 {
-	const LocationConfig* best_match = NULL;
-	size_t best_length = 0;
+	// Step 1: 规范化路径（确保一致性）
+	std::string normalized_uri = uri;
 	
-	// Find longest prefix match
-	for (size_t i = 0; i < locations.size(); i++)
+	// 如果路径以 / 结尾但不是根路径，移除尾部斜杠进行匹配
+	// 例如：/directory/ → /directory
+	if (normalized_uri.length() > 1 && 
+		normalized_uri[normalized_uri.length() - 1] == '/')
 	{
-		const LocationConfig& loc = locations[i];
-		const std::string& loc_path = loc.path;
-		
-		// Check if it's a prefix match
-		if (path.size() >= loc_path.size() &&
-			path.substr(0, loc_path.size()) == loc_path)
+		normalized_uri = normalized_uri.substr(0, normalized_uri.length() - 1);
+	}
+	
+	// Step 2: 精确匹配（优先级最高）
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		if (locations[i].path == normalized_uri || 
+			locations[i].path == uri)  // 也尝试原始 URI
 		{
-			// Ensure it's a full path match
-			// 1. If loc_path ends with '/' (e.g., "/" or "/images/"), prefix match is enough
-			// 2. Otherwise, it must be an exact match, or the next character in path must be '/' (e.g., "/upload" matches "/upload/file")
-			if ((!loc_path.empty() && loc_path[loc_path.size() - 1] == '/') || 
-				path.size() == loc_path.size() || 
-				path[loc_path.size()] == '/')
+			return &locations[i];
+		}
+	}
+	
+	// Step 3: 前缀匹配（按长度排序，最长匹配优先）
+	const LocationConfig* best_match = NULL;
+	size_t best_match_length = 0;
+	
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		const std::string& loc_path = locations[i].path;
+		
+		// 检查是否是前缀匹配
+		if (uri.find(loc_path) == 0)
+		{
+			// 确保匹配完整的路径段
+			// /directory/ 应该匹配 /directory/nop
+			// 但不应该匹配 /directoryabc
+			
+			if (loc_path.length() == uri.length() ||
+				uri[loc_path.length()] == '/')
 			{
-				if (loc_path.size() > best_length)
+				if (loc_path.length() > best_match_length)
 				{
-					best_length = loc_path.size();
-					best_match = &loc;
+					best_match = &locations[i];
+					best_match_length = loc_path.length();
 				}
 			}
 		}
 	}
 	
-	return best_match;
+	if (best_match)
+		return best_match;
+	
+	// Step 4: 返回默认 location (/)
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		if (locations[i].path == "/")
+			return &locations[i];
+	}
+	
+	return NULL;
 }
 
 // ==================== ConfigParser ====================

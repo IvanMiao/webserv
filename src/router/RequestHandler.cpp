@@ -58,57 +58,307 @@ HttpResponse RequestHandler::handleRequest(Client& client)
     return handleRequest(request);
 }
 
+    
+// HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
+// {
+//     Logger::debug("START handleRequest");
+//     std::string method = request.getMethod();
+//     Logger::debug("URI = {}, Method = {}", request.getPath(), method);
+    
+//     // SECURITY: Decode URL BEFORE path traversal check
+//     // This prevents bypass via encoded sequences like %2e%2e%2f (../)
+//     std::string decoded_path = StringUtils::urlDecode(request.getPath());
+    
+//     // Check for path traversal attacks BEFORE other validations
+//     // This ensures 403 is returned for traversal attempts, not 405
+//     if (decoded_path.find("..") != std::string::npos)
+//     {
+//         Logger::debug("Path traversal detected in decoded path, returning 403");
+//         return ErrorHandler::get_error_page(403, _config);
+//     }
+    
+//     const LocationConfig* location_config = _config.findLocation(decoded_path);
+
+//     if (!location_config)
+//         return ErrorHandler::get_error_page(404, _config);
+
+//     if (!location_config->isMethodAllowed(method))
+//     {
+//         Logger::debug("Method not allowed: {}", method);
+//         return ErrorHandler::get_error_page(405, _config);
+//     }
+
+//     if (location_config->hasRedirect())
+//     {
+//         return HttpResponse::createRedirectResponse(
+//             location_config->redirect_code,
+//             location_config->redirect_url
+//         );
+//     }
+
+//     if (request.getContentLength() > _config.client_max_body_size)
+//         return ErrorHandler::get_error_page(413, _config);
+
+//     if (method == "GET" || method == "HEAD")
+//         return _handleGet(request, *location_config, decoded_path);
+//     else if (method == "POST")
+//     {
+//         Logger::debug("Routing to _handlePost");
+//         return _handlePost(request, *location_config, decoded_path);
+//     }
+//     else if (method == "DELETE")
+//         return _handleDelete(request, *location_config, decoded_path);
+
+//     return ErrorHandler::get_error_page(501, _config);
+// }
+
+// ============================================================================
+// Main Entry Point for Request Processing
+// ============================================================================
+// Routes requests to appropriate handlers based on:
+// 1. Security checks (path traversal)
+// 2. Location matching
+// 3. Method permissions
+// 4. Redirect rules
+// 5. Directory auto-redirect (NEW!)
+// 6. Request size limits
+// ============================================================================
+
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
+    Logger::debug("============================================");
     Logger::debug("START handleRequest");
+    Logger::debug("============================================");
+    
     std::string method = request.getMethod();
-    Logger::debug("URI = {}, Method = {}", request.getPath(), method);
+    std::string raw_uri = request.getPath();
     
-    // SECURITY: Decode URL BEFORE path traversal check
+    Logger::debug("Raw URI: {}", raw_uri);
+    Logger::debug("Method: {}", method);
+    
+    // ========================================================================
+    // STEP 1: URL Decode (SECURITY CRITICAL)
+    // ========================================================================
+    // Decode URL BEFORE path traversal check
     // This prevents bypass via encoded sequences like %2e%2e%2f (../)
-    std::string decoded_path = StringUtils::urlDecode(request.getPath());
+    std::string decoded_path = StringUtils::urlDecode(raw_uri);
+    Logger::debug("Decoded path: {}", decoded_path);
     
+    // ========================================================================
+    // STEP 2: Path Traversal Check (SECURITY)
+    // ========================================================================
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
     if (decoded_path.find("..") != std::string::npos)
     {
-        Logger::debug("Path traversal detected in decoded path, returning 403");
+        Logger::debug("SECURITY: Path traversal detected, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
     
+    // // ========================================================================
+    // // STEP 3: Directory Auto-Redirect Check
+    // // ========================================================================
+    // // If requesting a directory without trailing slash, redirect to add it
+    // // This must happen BEFORE findLocation() to avoid 405 errors
+    
+    // // Build potential file path to check if it's a directory
+    // // We need to do a preliminary check with ANY location to see if path exists
+    // std::string test_file_path = _buildFilePathForCheck(decoded_path);
+    
+    // Logger::debug("Testing path: {}", test_file_path);
+    
+    // if (FileHandler::file_exists(test_file_path) && 
+    //     FileHandler::is_directory(test_file_path))
+    // {
+    //     // It's a directory - check if URI has trailing slash
+    //     if (!decoded_path.empty() && decoded_path[decoded_path.length() - 1] != '/')
+    //     {
+    //         // Missing trailing slash - redirect to add it
+    //         std::string redirect_uri = decoded_path + "/";
+            
+    //         // Preserve query string if present
+    //         if (!request.getQuery().empty())
+    //         {
+    //             redirect_uri += "?" + request.getQuery();
+    //         }
+            
+    //         Logger::debug("REDIRECT: Directory without trailing slash");
+    //         Logger::debug("  From: {}", decoded_path);
+    //         Logger::debug("  To: {}", redirect_uri);
+            
+    //         return HttpResponse::createRedirectResponse(301, redirect_uri);
+    //     }
+    // }
+    
+    // ========================================================================
+    // STEP 4: Find Matching Location
+    // ========================================================================
     const LocationConfig* location_config = _config.findLocation(decoded_path);
-
+    
     if (!location_config)
+    {
+        Logger::debug("ERROR: No location matched for path: {}", decoded_path);
         return ErrorHandler::get_error_page(404, _config);
-
+    }
+    
+    Logger::debug("Matched location: {}", location_config->path);
+    Logger::debug("Location root: {}", location_config->root);
+    Logger::debug("Allowed methods: [{}]", _formatMethodList(location_config->allow_methods));
+    
+    // ========================================================================
+    // STEP 5: Method Permission Check
+    // ========================================================================
     if (!location_config->isMethodAllowed(method))
     {
-        Logger::debug("Method not allowed: {}", method);
+        Logger::debug("ERROR: Method {} not allowed for location {}", 
+                     method, location_config->path);
         return ErrorHandler::get_error_page(405, _config);
     }
-
+    
+    // ========================================================================
+    // STEP 6: Redirect Rule Check
+    // ========================================================================
     if (location_config->hasRedirect())
     {
+        Logger::debug("REDIRECT: Location has redirect rule");
+        Logger::debug("  Code: {}", location_config->redirect_code);
+        Logger::debug("  URL: {}", location_config->redirect_url);
+        
         return HttpResponse::createRedirectResponse(
             location_config->redirect_code,
             location_config->redirect_url
         );
     }
-
-    if (request.getContentLength() > _config.client_max_body_size)
+    
+    // ========================================================================
+    // STEP 7: Request Body Size Check
+    // ========================================================================
+    size_t content_length = request.getContentLength();
+    if (content_length > _config.client_max_body_size)
+    {
+        Logger::debug("ERROR: Request body too large");
+        Logger::debug("  Size: {} bytes", content_length);
+        Logger::debug("  Limit: {} bytes", _config.client_max_body_size);
         return ErrorHandler::get_error_page(413, _config);
-
+    }
+    
+    // ========================================================================
+    // STEP 8: Route to Method Handler
+    // ========================================================================
+    Logger::debug("Routing to method handler: {}", method);
+    
     if (method == "GET" || method == "HEAD")
+    {
         return _handleGet(request, *location_config, decoded_path);
+    }
     else if (method == "POST")
     {
         Logger::debug("Routing to _handlePost");
         return _handlePost(request, *location_config, decoded_path);
     }
     else if (method == "DELETE")
+    {
         return _handleDelete(request, *location_config, decoded_path);
-
+    }
+    
+    // Method not implemented
+    Logger::debug("ERROR: Method not implemented: {}", method);
     return ErrorHandler::get_error_page(501, _config);
+}
+
+// ============================================================================
+// Helper: Build file path for preliminary directory check
+// ============================================================================
+// This is used before findLocation() to check if path is a directory
+// We need to guess the root directory - try common patterns
+std::string RequestHandler::_buildFilePathForCheck(const std::string& uri_path)
+{
+    // Strategy 1: Try to match against all locations to find best root
+    const LocationConfig* best_location = NULL;
+    size_t best_match_length = 0;
+    
+    for (size_t i = 0; i < _config.locations.size(); ++i)
+    {
+        const LocationConfig& loc = _config.locations[i];
+        
+        // Check if this location matches the URI
+        if (uri_path.find(loc.path) == 0)
+        {
+            if (loc.path.length() > best_match_length)
+            {
+                best_location = &loc;
+                best_match_length = loc.path.length();
+            }
+        }
+    }
+    
+    // Strategy 2: If no match, use root location
+    if (!best_location)
+    {
+        for (size_t i = 0; i < _config.locations.size(); ++i)
+        {
+            if (_config.locations[i].path == "/")
+            {
+                best_location = &_config.locations[i];
+                break;
+            }
+        }
+    }
+    
+    // Strategy 3: If still no match, use first location (fallback)
+    if (!best_location && !_config.locations.empty())
+    {
+        best_location = &_config.locations[0];
+    }
+    
+    // If we found a location, build the path
+    if (best_location)
+    {
+        std::string relative_path = uri_path;
+        
+        // Remove location prefix
+        if (uri_path.find(best_location->path) == 0 && best_location->path != "/")
+        {
+            relative_path = uri_path.substr(best_location->path.size());
+        }
+        
+        // Ensure relative path starts with /
+        if (relative_path.empty() || relative_path[0] != '/')
+        {
+            relative_path = "/" + relative_path;
+        }
+        
+        // Build full path
+        std::string result = best_location->root;
+        if (!result.empty() && result[result.length() - 1] == '/')
+        {
+            result = result.substr(0, result.length() - 1);
+        }
+        result += relative_path;
+        
+        return result;
+    }
+    
+    // Fallback: return URI as-is (should never happen)
+    return uri_path;
+}
+
+// ============================================================================
+// Helper: Format method list for logging
+// ============================================================================
+std::string RequestHandler::_formatMethodList(const std::vector<std::string>& methods)
+{
+    if (methods.empty())
+        return "NONE";
+    
+    std::string result;
+    for (size_t i = 0; i < methods.size(); ++i)
+    {
+        if (i > 0)
+            result += ", ";
+        result += methods[i];
+    }
+    return result;
 }
 
 // ============================================================================
@@ -128,8 +378,26 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
     if (!FileHandler::file_exists(file_path))
         return ErrorHandler::get_error_page(404, _config);
 
+    // ========== 关键修复：目录自动重定向 ==========
     if (FileHandler::is_directory(file_path))
     {
+        // 检查请求路径是否以 / 结尾
+        std::string uri = request.getPath();
+        if (!uri.empty() && uri[uri.length() - 1] != '/')
+        {
+            // 如果访问目录但没有尾部斜杠，重定向
+            std::string redirect_uri = uri + "/";
+            
+            // 保留查询字符串
+            if (!request.getQuery().empty())
+            {
+                redirect_uri += "?" + request.getQuery();
+            }
+            
+            return HttpResponse::createRedirectResponse(301, redirect_uri);
+        }
+        
+        // 有尾部斜杠，正常处理目录
         HttpResponse response = _serve_directory(file_path, location_config);
         if (request.getMethod() == "HEAD")
             response.setBody("");
@@ -229,35 +497,80 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
  * 
  * Note: uri_path is expected to already be URL-decoded by handleRequest()
  */
+// std::string RequestHandler::_buildFilePath(const std::string& uri_path,
+//                                            const LocationConfig& location_config)
+// {
+//     // Prefer alias over root if both are defined
+//     if (!location_config.alias.empty())
+//     {
+//         // Alias semantics: remove location prefix from URI
+//         std::string relative_path = uri_path;
+//         const std::string& location_path = location_config.path;
+        
+//         // If URI starts with location path, remove that prefix
+//         if (uri_path.find(location_path) == 0)
+//         {
+//             relative_path = uri_path.substr(location_path.length());
+            
+//             // Ensure path starts with /
+//             if (relative_path.empty())
+//                 relative_path = "/";
+//             else if (relative_path[0] != '/')
+//                 relative_path = "/" + relative_path;
+//         }
+        
+//         return location_config.alias + relative_path;
+//     }
+    
+//     // Root semantics: append full URI to root
+//     return location_config.root + uri_path;
+// }
+
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
+    std::string final_path;
+
+    // 打印初始信息
+    Logger::debug("--- Building File Path ---");
+    Logger::debug("URI Path: '{}'", uri_path);
+    Logger::debug("Location Path: '{}'", location_config.path);
+    Logger::debug("Location Root: '{}'", location_config.root);
+    Logger::debug("Location Alias: '{}'", location_config.alias);
+
     // Prefer alias over root if both are defined
     if (!location_config.alias.empty())
     {
-        // Alias semantics: remove location prefix from URI
         std::string relative_path = uri_path;
         const std::string& location_path = location_config.path;
         
-        // If URI starts with location path, remove that prefix
         if (uri_path.find(location_path) == 0)
         {
             relative_path = uri_path.substr(location_path.length());
             
-            // Ensure path starts with /
             if (relative_path.empty())
                 relative_path = "/";
             else if (relative_path[0] != '/')
                 relative_path = "/" + relative_path;
         }
         
-        return location_config.alias + relative_path;
+        final_path = location_config.alias + relative_path;
+        Logger::debug("Using ALIAS logic. Relative: '{}' -> Final: '{}'", relative_path, final_path);
     }
-    
-    // Root semantics: append full URI to root
-    return location_config.root + uri_path;
-}
+    else
+    {
+        // Root semantics: append full URI to root
+        final_path = location_config.root + uri_path;
+        Logger::debug("Using ROOT logic. Final: '{}'", final_path);
+    }
 
+    // 检查是否有双斜杠 //
+    // 如果 final_path 中出现了 //，有些操作系统可能无法正确识别
+    Logger::debug("Resulting Path: '{}'", final_path);
+    Logger::debug("--------------------------");
+
+    return final_path;
+}
 
 // Check if file is a CGI script based on configured extension
 bool RequestHandler::_isCgiRequest(const std::string& file_path,

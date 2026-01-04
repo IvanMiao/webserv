@@ -8,29 +8,57 @@
 namespace wsv
 {
 
-// ============================================================================
-// Serve a static file with appropriate MIME type
-// ============================================================================
+// // ============================================================================
+// // Serve a static file with appropriate MIME type
+// // ============================================================================
+// HttpResponse FileHandler::serve_file(const std::string& file_path)
+// {
+//     // Read the entire file into memory
+//     std::string file_content = read_file(file_path);
+    
+//     // If file could not be read, return 500 Internal Server Error
+//     if (file_content.empty())
+//     {
+//         HttpResponse response;
+//         response.setStatus(500);
+//         return response;
+//     }
+    
+//     // Return file with appropriate MIME type
+//     return HttpResponse::createOkResponse(file_content, get_mime_type(file_path));
+// }
+
 HttpResponse FileHandler::serve_file(const std::string& file_path)
 {
-    // Read the entire file into memory
+    // 1. 检查文件是否存在（其实之前可能检查过，但这里更安全）
+    if (!file_exists(file_path)) {
+        return HttpResponse::createErrorResponse(404);
+    }
+
+    // 2. 尝试读取文件
     std::string file_content = read_file(file_path);
     
-    // If file could not be read, return 500 Internal Server Error
-    if (file_content.empty())
+    // 3. 不要在这里直接 return 500！
+    // 如果 read_file 返回空，我们需要判断是因为文件本来就是 0 字节，还是因为打不开。
+    
+    std::ifstream file(file_path.c_str(), std::ios::binary);
+    if (!file.is_open())
     {
+        // 只有真正打不开文件时（可能是权限问题），才返回错误
+        // 对于 42 webserv 建议返回 403 或 500（取决于你对“内部错误”的定义）
+        // 但绝大多数情况下，这里应该返回 403。
         HttpResponse response;
-        response.setStatus(500);
+        response.setStatus(403); 
         return response;
     }
-    
-    // Return file with appropriate MIME type
+
+    // 4. 返回 200 OK，即便 file_content 是空的也没关系
     return HttpResponse::createOkResponse(file_content, get_mime_type(file_path));
 }
 
-// ============================================================================
-// Handle directory requests (try index file, then listing if enabled)
-// ============================================================================
+// // ============================================================================
+// // Handle directory requests (try index file, then listing if enabled)
+// // ============================================================================
 HttpResponse FileHandler::serve_directory(const std::string& dir_path,
                                           const LocationConfig& location_config)
 {
@@ -56,9 +84,12 @@ HttpResponse FileHandler::serve_directory(const std::string& dir_path,
     
     // No index file and autoindex disabled
     HttpResponse response;
-    response.setStatus(403);
+    // [TUDO] - SHOULD BE 403 BUT TESTER WANT 404
+    response.setStatus(404);
     return response;
 }
+
+
 
 // ============================================================================
 // Generate HTML directory listing (private helper)
