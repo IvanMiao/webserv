@@ -183,6 +183,12 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     // STEP 7: Request Body Size Check
     // ========================================================================
     size_t content_length = request.getContentLength();
+    
+    // For chunked requests, Content-Length header is not present/valid
+    // We must check the actual received body size
+    if (request.isChunked())
+        content_length = request.getBody().length();
+
     if (content_length > location_config->client_max_body_size)
     {
         Logger::debug("ERROR: Request body too large");
@@ -197,18 +203,11 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     Logger::debug("Routing to method handler: {}", method);
     
     if (method == "GET" || method == "HEAD")
-    {
         return _handleGet(request, *location_config, decoded_path);
-    }
     else if (method == "POST")
-    {
-        Logger::debug("Routing to _handlePost");
         return _handlePost(request, *location_config, decoded_path);
-    }
     else if (method == "DELETE")
-    {
         return _handleDelete(request, *location_config, decoded_path);
-    }
     
     // Method not implemented
     Logger::debug("ERROR: Method not implemented: {}", method);
@@ -339,9 +338,7 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
             
             // Preserve query string
             if (!request.getQuery().empty())
-            {
                 redirect_uri += "?" + request.getQuery();
-            }
             
             return HttpResponse::createRedirectResponse(301, redirect_uri);
         }
@@ -369,6 +366,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
                                          const LocationConfig& location_config,
                                          const std::string& decoded_path)
 {
+    Logger::debug("Routing to _handlePost");
     Logger::debug("Method = {}, Path = {}", request.getMethod(), request.getPath());
     Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
     

@@ -33,6 +33,7 @@ ServerConfig create_basic_config() {
 	loc_root.allow_methods.push_back("GET");
 	loc_root.index = "index.html";
 	loc_root.autoindex = false;
+	loc_root.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_root);
 
 	// Location: /uploads
@@ -45,6 +46,7 @@ ServerConfig create_basic_config() {
 	loc_uploads.upload_enable = true;
 	loc_uploads.upload_path = "test/www_test/uploads";
 	loc_uploads.autoindex = true;
+	loc_uploads.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_uploads);
 
 	// Location: /redirect
@@ -53,6 +55,7 @@ ServerConfig create_basic_config() {
 	// Checking RequestHandler.cpp: location_config->hasRedirect(), redirect_code, redirect_url
 	loc_redirect.redirect_code = 301;
 	loc_redirect.redirect_url = "http://example.com";
+	loc_redirect.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_redirect);
 
 	return config;
@@ -248,6 +251,9 @@ void test_max_body_size(TestRunner& runner) {
 	try {
 		ServerConfig config = create_basic_config();
 		config.client_max_body_size = 10; // Very small limit
+		// Update locations to use the new limit
+		for (size_t i = 0; i < config.locations.size(); ++i)
+			config.locations[i].client_max_body_size = config.client_max_body_size;
 		RequestHandler handler(config);
 		
 		std::string body = "This body is definitely longer than 10 bytes";
@@ -276,8 +282,8 @@ void test_autoindex_directory(TestRunner& runner) {
 		ServerConfig config = create_basic_config();
 		RequestHandler handler(config);
 		
-		// /uploads has autoindex = true
-		HttpRequest request("GET /uploads HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		// /uploads has autoindex = true, must use trailing slash (directory redirect)
+		HttpRequest request("GET /uploads/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
 		if (response.getStatus() != 200) throw std::runtime_error("Expected 200 OK, got " + StringUtils::toString(response.getStatus()));
@@ -292,7 +298,7 @@ void test_autoindex_directory(TestRunner& runner) {
 }
 
 void test_directory_no_autoindex(TestRunner& runner) {
-	runner.startTest("GET directory without index and autoindex disabled returns 403");
+	runner.startTest("GET directory without index and autoindex disabled returns 404");
 	try {
 		// Ensure the protected directory exists for testing
 		mkdir("test/www_test/protected", 0755);
@@ -305,14 +311,16 @@ void test_directory_no_autoindex(TestRunner& runner) {
 		loc_protected.allow_methods.push_back("GET");
 		loc_protected.index = "nonexistent.html";
 		loc_protected.autoindex = false;
+		loc_protected.client_max_body_size = config.client_max_body_size;
 		config.locations.push_back(loc_protected);
 		
 		RequestHandler handler(config);
 		
-		HttpRequest request("GET /protected HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		HttpRequest request("GET /protected/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
-		if (response.getStatus() != 403) throw std::runtime_error("Expected 403, got " + StringUtils::toString(response.getStatus()));
+		// Note: Source code returns 404 for tester compatibility (was 403)
+		if (response.getStatus() != 404) throw std::runtime_error("Expected 404, got " + StringUtils::toString(response.getStatus()));
 		
 		runner.pass();
 	} catch (const std::exception& e) {
@@ -455,11 +463,12 @@ void test_subdirectory_with_index(TestRunner& runner) {
 		loc_public.allow_methods.push_back("GET");
 		loc_public.index = "index.html";
 		loc_public.autoindex = false;
+		loc_public.client_max_body_size = config.client_max_body_size;
 		config.locations.push_back(loc_public);
 		
 		RequestHandler handler(config);
 		
-		HttpRequest request("GET /public HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		HttpRequest request("GET /public/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
 		if (response.getStatus() != 200) throw std::runtime_error("Expected 200 OK, got " + StringUtils::toString(response.getStatus()));
