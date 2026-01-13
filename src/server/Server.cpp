@@ -535,7 +535,7 @@ void Server::_check_client_timeouts()
 				client.keep_alive = false; // Close connection after timeout
 				_modify_epoll(it->first, EPOLLIN | EPOLLOUT);
 			}
-			// Don't check regular idle timeout while CGI is processing
+			// Don't check regular idle timeout while CGI is processing [NOTE: that's for test]
 			continue;
 		}
 		
