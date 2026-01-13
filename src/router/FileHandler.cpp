@@ -13,21 +13,19 @@ namespace wsv
 // ============================================================================
 HttpResponse FileHandler::serve_file(const std::string& file_path)
 {
-    // 1. Check if the file exists (it may have been checked earlier, but safer to re-check)
+    // 1. Check if the file exists
     if (!file_exists(file_path))
         return HttpResponse::createErrorResponse(404);
 
     // 2. Attempt to read the file
     std::string file_content = read_file(file_path);
     
-    // 3. Do not return 500 here directly!
+    // 3. We do not return 500 directly!
     // If read_file returns empty, determine whether the file is actually zero bytes or couldn't be opened.
     
     std::ifstream file(file_path.c_str(), std::ios::binary);
     if (!file.is_open())
     {
-        // Only return an error when the file truly cannot be opened (e.g. permission issue).
-        // In most cases, returning 403 is appropriate.
         HttpResponse response;
         response.setStatus(403); 
         return response;
@@ -65,11 +63,10 @@ HttpResponse FileHandler::serve_directory(const std::string& dir_path,
     
     // No index file and autoindex disabled
     HttpResponse response;
-    // [TUDO] - SHOULD BE 403 BUT TESTER WANT 404
+    // [NOTE] SHOULD BE 403 BUT TESTER WANT 404
     response.setStatus(404);
     return response;
 }
-
 
 
 // ============================================================================

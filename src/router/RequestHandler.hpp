@@ -102,13 +102,6 @@ private:
     std::string _buildFilePath(const std::string& uri_path,
                                const LocationConfig& location_config);
 
-    // Build file path for preliminary check (before findLocation)
-    std::string _buildFilePathForCheck(const std::string& uri_path);
-
-    // Validate file for CGI execution
-    bool _validateCgiFile(const std::string& file_path, 
-                         HttpResponse& error_response);
-    
     // Format method list for logging
     std::string _formatMethodList(const std::vector<std::string>& methods);
     

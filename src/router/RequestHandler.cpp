@@ -56,22 +56,11 @@ HttpResponse RequestHandler::handleRequest(Client& client)
         return HttpResponse(); 
     }
 
-    // Fallback to standard synchronous processing
+    // Fallback to standard processing
     return handleRequest(request);
 }
 
-    
-// ============================================================================
-// Main Entry Point for Request Processing
-// ============================================================================
-// Routes requests to appropriate handlers based on:
-// 1. Security checks (path traversal)
-// 2. Location matching
-// 3. Method permissions
-// 4. Redirect rules
-// 5. Directory auto-redirect
-// 6. Request size limits
-// ============================================================================
+// standard processing
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
     Logger::debug("============================================");
@@ -98,43 +87,8 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         Logger::debug("SECURITY: Path traversal detected, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
-    
-    // // ========================================================================
-    // // STEP 3: Directory Auto-Redirect Check
-    // // ========================================================================
-    // // If requesting a directory without trailing slash, redirect to add it
-    // // This must happen BEFORE findLocation() to avoid 405 errors
-    
-    // // Build potential file path to check if it's a directory
-    // // We need to do a preliminary check with ANY location to see if path exists
-    // std::string test_file_path = _buildFilePathForCheck(decoded_path);
-    
-    // Logger::debug("Testing path: {}", test_file_path);
-    
-    // if (FileHandler::file_exists(test_file_path) && 
-    //     FileHandler::is_directory(test_file_path))
-    // {
-    //     // It's a directory - check if URI has trailing slash
-    //     if (!decoded_path.empty() && decoded_path[decoded_path.length() - 1] != '/')
-    //     {
-    //         // Missing trailing slash - redirect to add it
-    //         std::string redirect_uri = decoded_path + "/";
-            
-    //         // Preserve query string if present
-    //         if (!request.getQuery().empty())
-    //         {
-    //             redirect_uri += "?" + request.getQuery();
-    //         }
-            
-    //         Logger::debug("REDIRECT: Directory without trailing slash");
-    //         Logger::debug("  From: {}", decoded_path);
-    //         Logger::debug("  To: {}", redirect_uri);
-            
-    //         return HttpResponse::createRedirectResponse(301, redirect_uri);
-    //     }
-    // }
-    
-    // STEP 4: Find Matching Location
+  
+    // STEP 3: Find Matching Location
     const LocationConfig* location_config = _config.findLocation(decoded_path);
     
     if (!location_config)
@@ -147,7 +101,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     Logger::debug("Location root: {}", location_config->root);
     Logger::debug("Allowed methods: [{}]", _formatMethodList(location_config->allow_methods));
     
-    // STEP 5: Method Permission Check
+    // STEP 4: Method Permission Check
     if (!location_config->isMethodAllowed(method))
     {
         Logger::debug("ERROR: Method {} not allowed for location {}", 
@@ -155,7 +109,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return ErrorHandler::get_error_page(405, _config);
     }
     
-    // STEP 6: Redirect Rule Check
+    // STEP 5: Redirect Rule Check
     if (location_config->hasRedirect())
     {
         Logger::debug("REDIRECT: Location has redirect rule");
@@ -168,7 +122,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         );
     }
     
-    // STEP 7: Request Body Size Check
+    // STEP 6: Request Body Size Check
     size_t content_length = request.getContentLength();
     
     // For chunked requests, Content-Length header is not present/valid
@@ -184,7 +138,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return ErrorHandler::get_error_page(413, _config);
     }
     
-    // STEP 8: Route to Method Handler
+    // STEP 7: Route to Method Handler
     Logger::debug("Routing to method handler: {}", method);
     
     if (method == "GET" || method == "HEAD")
@@ -197,83 +151,6 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     // Method not implemented
     Logger::debug("ERROR: Method not implemented: {}", method);
     return ErrorHandler::get_error_page(501, _config);
-}
-
-// ============================================================================
-// Helper: Build file path for preliminary directory check
-// ============================================================================
-// This is used before findLocation() to check if path is a directory
-// We need to guess the root directory - try common patterns
-std::string RequestHandler::_buildFilePathForCheck(const std::string& uri_path)
-{
-    // Strategy 1: Try to match against all locations to find best root
-    const LocationConfig* best_location = NULL;
-    size_t best_match_length = 0;
-    
-    for (size_t i = 0; i < _config.locations.size(); ++i)
-    {
-        const LocationConfig& loc = _config.locations[i];
-        
-        // Check if this location matches the URI
-        if (uri_path.find(loc.path) == 0)
-        {
-            if (loc.path.length() > best_match_length)
-            {
-                best_location = &loc;
-                best_match_length = loc.path.length();
-            }
-        }
-    }
-    
-    // Strategy 2: If no match, use root location
-    if (!best_location)
-    {
-        for (size_t i = 0; i < _config.locations.size(); ++i)
-        {
-            if (_config.locations[i].path == "/")
-            {
-                best_location = &_config.locations[i];
-                break;
-            }
-        }
-    }
-    
-    // Strategy 3: If still no match, use first location (fallback)
-    if (!best_location && !_config.locations.empty())
-    {
-        best_location = &_config.locations[0];
-    }
-    
-    // If we found a location, build the path
-    if (best_location)
-    {
-        std::string relative_path = uri_path;
-        
-        // Remove location prefix
-        if (uri_path.find(best_location->path) == 0 && best_location->path != "/")
-        {
-            relative_path = uri_path.substr(best_location->path.size());
-        }
-        
-        // Ensure relative path starts with /
-        if (relative_path.empty() || relative_path[0] != '/')
-        {
-            relative_path = "/" + relative_path;
-        }
-        
-        // Build full path
-        std::string result = best_location->root;
-        if (!result.empty() && result[result.length() - 1] == '/')
-        {
-            result = result.substr(0, result.length() - 1);
-        }
-        result += relative_path;
-        
-        return result;
-    }
-    
-    // Fallback: return URI as-is (should never happen)
-    return uri_path;
 }
 
 // ============================================================================
