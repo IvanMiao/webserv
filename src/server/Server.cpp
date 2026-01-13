@@ -320,7 +320,7 @@ void Server::_handle_client_data(int client_fd)
 				client.keep_alive = false;
 			}
 			
-			// 1. Handle request (Async or Sync)
+			// Handle request
 			_process_request(client_fd);
 
 			// If state became WRITING_RESPONSE, enable write event

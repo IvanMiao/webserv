@@ -374,7 +374,7 @@ HttpResponse UploadHandler::_save_file(const std::string& file_path,
     }
     
     HttpResponse response;
-    response.setStatus(200);  // Success
+    response.setStatus(200);
     return response;
 }
 

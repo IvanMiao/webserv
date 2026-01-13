@@ -16,7 +16,7 @@ class LocationConfig
 public:
 	std::string		path;
 	std::string		root;
-	std::string		alias;          // alias directive (takes precedence over root)
+	std::string		alias;  // alias directive (takes precedence over root)
 	std::vector<std::string>	allow_methods; // allowed HTTP methods
 	std::string		index;
 	bool			autoindex;
@@ -30,7 +30,7 @@ public:
 	std::string	upload_path;
 	
 	// CGI
-	std::string	cgi_extension;  // .py, .php
+	std::string	cgi_extension;  // .py
 	std::string	cgi_path;       // CGI excutable path /usr/bin/python3
 	size_t		client_max_body_size; // Max body size for this location
 

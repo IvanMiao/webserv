@@ -8,9 +8,9 @@
 namespace wsv
 {
 
-// // ============================================================================
-// // Serve a static file with appropriate MIME type
-// // ============================================================================
+// ============================================================================
+// Serve a static file with appropriate MIME type
+// ============================================================================
 HttpResponse FileHandler::serve_file(const std::string& file_path)
 {
     // 1. Check if the file exists (it may have been checked earlier, but safer to re-check)
@@ -37,9 +37,9 @@ HttpResponse FileHandler::serve_file(const std::string& file_path)
     return HttpResponse::createOkResponse(file_content, get_mime_type(file_path));
 }
 
-// // ============================================================================
-// // Handle directory requests (try index file, then listing if enabled)
-// // ============================================================================
+// ============================================================================
+// Handle directory requests (try index file, then listing if enabled)
+// ============================================================================
 HttpResponse FileHandler::serve_directory(const std::string& dir_path,
                                           const LocationConfig& location_config)
 {

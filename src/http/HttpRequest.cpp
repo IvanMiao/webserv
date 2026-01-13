@@ -123,6 +123,7 @@ bool HttpRequest::_tryParseRequestLine()
     return true;
 }
 
+// Parse request line: "GET /path HTTP/1.1"
 void HttpRequest::_parseRequestLine(const std::string& line)
 {
     std::istringstream stream(line);
@@ -148,10 +149,13 @@ void HttpRequest::_parseRequestLine(const std::string& line)
     _parseUrl(url);
 }
 
+
+// ===== Request Line Parsing =====
+
+// Split URL into path and query string
+// Example: "/api/users?id=123" -> path="/api/users", query="id=123"
 void HttpRequest::_parseUrl(const std::string& url)
 {
-    // Split URL into path and query string
-    // Example: "/api/users?id=123" -> path="/api/users", query="id=123"
     size_t query_start = url.find('?');
     
     if (query_start != std::string::npos)
@@ -165,6 +169,7 @@ void HttpRequest::_parseUrl(const std::string& url)
         _query.clear();
     }
 }
+
 
 // ===== Headers Parsing =====
 
@@ -210,6 +215,7 @@ bool HttpRequest::_tryParseHeaders()
     }
 }
 
+//Parse a single header line: "Key: Value"
 void HttpRequest::_parseHeaderLine(const std::string& line)
 {
     // Find colon separator
@@ -218,7 +224,7 @@ void HttpRequest::_parseHeaderLine(const std::string& line)
     if (colon_pos == std::string::npos)
         return;  // Malformed header, skip it
 
-    // Extract and normalize key (lowercase)
+    // Extract and normalize key to lowercase
     std::string key = StringUtils::toLower(StringUtils::trim(line.substr(0, colon_pos)));
     
     // Extract and trim value
@@ -243,6 +249,7 @@ void HttpRequest::_transitionToBodyOrComplete()
         // No body, request is complete
         _state = PARSE_COMPLETE;
 }
+
 
 // ===== Body Parsing =====
 
@@ -383,8 +390,7 @@ bool HttpRequest::_validateMethod(const std::string& method) const
     return method == "GET" || 
            method == "POST" || 
            method == "DELETE" ||
-           method == "HEAD" ||
-           method == "PUT";
+           method == "HEAD";
 }
 
 bool HttpRequest::_validateVersion(const std::string& version) const

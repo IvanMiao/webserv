@@ -72,7 +72,6 @@ HttpResponse RequestHandler::handleRequest(Client& client)
 // 5. Directory auto-redirect
 // 6. Request size limits
 // ============================================================================
-
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
     Logger::debug("============================================");
@@ -326,7 +325,7 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
     if (!FileHandler::file_exists(file_path))
         return ErrorHandler::get_error_page(404, _config);
 
-    // ========== Key Fix: Directory Auto-Redirect ==========
+    // Directory Auto-Redirect
     if (FileHandler::is_directory(file_path))
     {
         // Check if request path ends with /
@@ -397,7 +396,7 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
                                            const LocationConfig& location_config,
                                            const std::string& decoded_path)
 {
-    (void)request;  // Unused but kept for consistent interface
+    (void)request;  // Unused but kept for the same interface
     // Path traversal check is now done in handleRequest() before method validation
     std::string file_path = _buildFilePath(decoded_path, location_config);
 

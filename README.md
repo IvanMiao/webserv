@@ -3,9 +3,7 @@ A Nginx-like webserv in C++
 
 ## TODO
 
-1. WRITE_BUFFER, write, send
-
-2. 
+1. 
 
 ## Workflow
 
