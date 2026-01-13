@@ -84,17 +84,13 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     Logger::debug("Raw URI: {}", raw_uri);
     Logger::debug("Method: {}", method);
     
-    // ========================================================================
-    // STEP 1: URL Decode (SECURITY CRITICAL)
-    // ========================================================================
+    // STEP 1: URL Decode (SECURITY)
     // Decode URL BEFORE path traversal check
     // This prevents bypass via encoded sequences like %2e%2e%2f (../)
     std::string decoded_path = StringUtils::urlDecode(raw_uri);
     Logger::debug("Decoded path: {}", decoded_path);
     
-    // ========================================================================
     // STEP 2: Path Traversal Check (SECURITY)
-    // ========================================================================
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
     if (decoded_path.find("..") != std::string::npos)
@@ -138,9 +134,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     //     }
     // }
     
-    // ========================================================================
     // STEP 4: Find Matching Location
-    // ========================================================================
     const LocationConfig* location_config = _config.findLocation(decoded_path);
     
     if (!location_config)
@@ -153,9 +147,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
     Logger::debug("Location root: {}", location_config->root);
     Logger::debug("Allowed methods: [{}]", _formatMethodList(location_config->allow_methods));
     
-    // ========================================================================
     // STEP 5: Method Permission Check
-    // ========================================================================
     if (!location_config->isMethodAllowed(method))
     {
         Logger::debug("ERROR: Method {} not allowed for location {}", 
@@ -163,9 +155,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return ErrorHandler::get_error_page(405, _config);
     }
     
-    // ========================================================================
     // STEP 6: Redirect Rule Check
-    // ========================================================================
     if (location_config->hasRedirect())
     {
         Logger::debug("REDIRECT: Location has redirect rule");
@@ -178,9 +168,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         );
     }
     
-    // ========================================================================
     // STEP 7: Request Body Size Check
-    // ========================================================================
     size_t content_length = request.getContentLength();
     
     // For chunked requests, Content-Length header is not present/valid
@@ -196,9 +184,7 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
         return ErrorHandler::get_error_page(413, _config);
     }
     
-    // ========================================================================
     // STEP 8: Route to Method Handler
-    // ========================================================================
     Logger::debug("Routing to method handler: {}", method);
     
     if (method == "GET" || method == "HEAD")
@@ -507,9 +493,7 @@ bool RequestHandler::_isCgiRequest(const std::string& file_path,
     return (ext == location_config.cgi_extension);
 }
 
-/**
- * Serve static file
- */
+// Serve static file
 HttpResponse RequestHandler::_serve_file(const std::string& file_path)
 {
     HttpResponse response = FileHandler::serve_file(file_path);
@@ -518,9 +502,7 @@ HttpResponse RequestHandler::_serve_file(const std::string& file_path)
     return response;
 }
 
-/**
- * Serve directory (index file or autoindex)
- */
+// Serve directory (index file or autoindex)
 HttpResponse RequestHandler::_serve_directory(const std::string& dir_path,
                                               const LocationConfig& location_config)
 {
