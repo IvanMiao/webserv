@@ -1,3 +1,200 @@
+# CGI (Common Gateway Interface) Module
+
+The CGI module allows the web server to execute external programs (scripts) and return dynamically generated content to the client.  
+This project implements **non-blocking CGI**, ensuring that time-consuming scripts do not block the server's main event loop.
+
+---
+
+## 1. Architecture Design (Non-Blocking)
+
+Traditional CGI implementations are often **blocking**:  
+The server `fork`s a child process and waits using `read()`, blocking until the child finishes output.  
+During this time, the server cannot handle other client requests.
+
+**In this project, we use a Reactor pattern combined with `epoll` to implement asynchronous CGI handling:**
+
+1. **Request routing**  
+   `CgiRequestHandler` identifies CGI requests and prepares environment variables.
+
+2. **Process startup**  
+   `CgiHandler` calls `fork()` + `execve()`, and creates **non-blocking pipes**.
+
+3. **Event registration**  
+   - Register CGI `stdout` (read end) with `epoll` for `EPOLLIN`.  
+   - If there is POST data, register `stdin` (write end) with `EPOLLOUT`.
+
+4. **State saving**  
+   The `Client` object stores CGI FDs and the `CgiHandler` instance, switching its state to `CLIENT_CGI_PROCESSING`.
+
+5. **Event loop**  
+   - The `Server` main loop continues handling other connections.  
+   - When a CGI pipe is ready, `Server::_handle_cgi_data` is triggered.
+
+6. **Data transfer**  
+   - **Write input**: send request body to CGI (non-blocking).  
+   - **Read output**: read CGI response into a buffer.
+
+7. **Completion**  
+   - When pipes close or EOF is reached, the server reaps the child process (`waitpid`).  
+   - Parse CGI output (split Headers and Body).  
+   - Build `HttpResponse` and send it to the client.
+
+---
+
+## Plot 1 — Non-Blocking CGI Flow
+
+```text
+Client                   Server
+   |        Request         |
+   | -------------------->  |
+   |      Route CGI          |
+   |       fork+exec         |
+   |      Non-blocking pipe  |
+   |                         |
+   |       epoll loop         |
+   | <-------------------    |
+   |   CGI stdout ready       |
+   |   _handle_cgi_data       |
+   |   Read/Write data        |
+   | -------------------->  |
+   |     Response ready       |
+   | <--------------------   |
+````
+
+---
+
+## 2. Core Classes & Responsibilities
+
+| Class               | Responsibility                                                                                                                       |
+| :------------------ | :----------------------------------------------------------------------------------------------------------------------------------- |
+| `CgiHandler`        | Handles low-level `pipe`, `fork`, `dup2`, `execve`. Manages environment variables. Provides non-blocking FDs for epoll registration. |
+| `CgiRequestHandler` | Prepares CGI environment variables according to RFC 3875 (`REQUEST_METHOD`, `SCRIPT_NAME`, etc.). Initializes CGI processing.        |
+| `Server`            | Integrates `epoll` to monitor CGI pipes. Dispatches I/O events via `_handle_cgi_data`. Handles timeouts and child process reaping.   |
+
+---
+
+## 3. Core Environment Variables (RFC 3875)
+
+The server passes the following standard environment variables to the CGI script:
+
+| Variable          | Description            | Example                    |
+| :---------------- | :--------------------- | :------------------------- |
+| `REQUEST_METHOD`  | HTTP request method    | `GET`, `POST`              |
+| `QUERY_STRING`    | URL parameters         | `id=123&name=test`         |
+| `CONTENT_LENGTH`  | Request body length    | `42`                       |
+| `CONTENT_TYPE`    | Request body type      | `application/json`         |
+| `SCRIPT_NAME`     | Script request path    | `/cgi-bin/test.py`         |
+| `SCRIPT_FILENAME` | Absolute physical path | `/var/www/cgi-bin/test.py` |
+| `SERVER_PROTOCOL` | HTTP version           | `HTTP/1.1`                 |
+
+---
+
+## 4. Testing Guide
+
+The project includes automated tests in the `test/` directory to verify CGI functionality, concurrency, and robustness.
+
+### 4.1 Prerequisites
+
+Ensure `python3` is installed.
+
+### 4.2 Start Server
+
+From the project root:
+
+```bash
+make re
+./webserv config/default.conf
+```
+
+### 4.3 Run Test Scripts
+
+#### A. Functional Tests
+
+Verify basic GET/POST methods, environment variables, and header parsing:
+
+```bash
+python3 test/test_cgi_methods.py
+```
+
+* **Expected result**: All checks show `PASS`.
+
+---
+
+#### B. Concurrency Tests
+
+Test that slow CGI scripts **do not block the server**.
+A slow CGI request (5s delay) runs alongside a static file request.
+
+```bash
+python3 test/test_cgi_concurrency.py
+```
+
+* **Expected result**: Static file request returns immediately (<0.1s).
+
+---
+
+#### C. Load Tests
+
+Simulate 100+ concurrent CGI requests:
+
+```bash
+python3 test/test_cgi_load.py
+```
+
+* **Expected result**: All requests succeed (`200 OK`), no connection failures.
+
+---
+
+#### D. Error Handling
+
+Test crash scripts, missing scripts, and timeouts:
+
+```bash
+python3 test/test_cgi_errors.py
+```
+
+* **Expected result**:
+
+  * Crash Script → `500 Internal Server Error`
+  * Missing Script → `404 Not Found`
+
+---
+
+## 5. Provided CGI Scripts
+
+Located in `www/cgi-bin/` for testing:
+
+| Script            | Purpose                                  |
+| :---------------- | :--------------------------------------- |
+| `echo_env.py`     | Prints all environment variables         |
+| `echo_body.py`    | Echoes POST request body                 |
+| `sleep.py`        | Sleeps 5s (for concurrency testing)      |
+| `crash.py`        | Simulates crash (non-zero exit code)     |
+| `large_output.py` | Generates large output to test buffering |
+
+---
+
+## Plot 2 — CGI Lifecycle
+
+```text
+Client        Server        CGI Process
+  |            |               |
+  |  Request   |               |
+  | ---------> |               |
+  |            | fork+exec     |
+  |            | --------------> |
+  |            | Non-blocking pipe|
+  |            | <-------------  |
+  |            | epoll monitors  |
+  |            | read/write data |
+  | <--------- |                |
+  | Response   |                |
+```
+
+```
+```
+
+
 # CGI (Common Gateway Interface) 模块
 
 CGI 模块允许 Web 服务器执行外部程序（脚本）并将动态生成的内容返回给客户端。本项目采用 **非阻塞（Non-Blocking）** 架构实现 CGI，确保耗时的脚本执行不会阻塞服务器的主事件循环。

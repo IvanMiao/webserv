@@ -65,7 +65,8 @@ private:
     std::string _body;
     size_t _content_length;
     size_t _body_received;
-    
+    size_t _total_headers_size; // Total size of headers parsed so far
+
     // Parsing buffer (holds incomplete data)
     std::string _buffer;
     

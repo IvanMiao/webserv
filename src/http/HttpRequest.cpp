@@ -12,6 +12,7 @@ HttpRequest::HttpRequest()
     : _state(PARSING_REQUEST_LINE)
     , _content_length(0)
     , _body_received(0)
+    , _total_headers_size(0)
     , _chunk_size(0)
     , _chunk_finished(true)
 { }
@@ -20,6 +21,7 @@ HttpRequest::HttpRequest(const std::string& raw_request)
     : _state(PARSING_REQUEST_LINE)
     , _content_length(0)
     , _body_received(0)
+    , _total_headers_size(0)
     , _chunk_size(0)
     , _chunk_finished(true)
 {
@@ -39,6 +41,7 @@ HttpRequest::~HttpRequest()
 
 void HttpRequest::reset()
 {
+    _total_headers_size = 0;
     _state = PARSING_REQUEST_LINE;
     _method.clear();
     _path.clear();
@@ -190,6 +193,8 @@ bool HttpRequest::_tryParseHeaders()
             return false;  // Need more data
         }
 
+        size_t line_size = line_end + 2;  // Include \r\n
+
         // Check if header line exceeds limit
         // Note: This is a simple check per line. For total header size limit, 
         // we would need to track total bytes consumed by headers.
@@ -198,6 +203,14 @@ bool HttpRequest::_tryParseHeaders()
             _state = PARSE_ERROR;
             return false;
         }
+
+        // Update total headers size
+        if (_total_headers_size + line_size > MAX_HEADER_SIZE)
+        {
+            _state = PARSE_ERROR;
+            return false;
+        }
+        _total_headers_size += line_size; 
 
         // Extract line
         std::string line = _buffer.substr(0, line_end);
