@@ -93,6 +93,19 @@ async function testServer() {
 	}
 }
 
+// Execute CGI script
+async function runCgi() {
+	const display = document.getElementById('cgi-display');
+	display.textContent = 'Running CGI...';
+	try {
+		const res = await fetch('/cgi-bin/hello.py', {method: 'GET'});
+		const text = await res.text();
+		display.textContent = `${res.status} ${res.statusText}\n\n${text}`;
+	} catch (e) {
+		display.textContent = 'Error: ' + e.message;
+	}
+}
+
 // Initialize on page load
 testServer();
 loadFiles();

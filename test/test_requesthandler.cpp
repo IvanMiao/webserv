@@ -723,6 +723,61 @@ void test_multipart_with_multiple_parts(TestRunner& runner) {
 	}
 }
 
+void test_upload_directory_not_exist(TestRunner& runner) {
+	runner.startTest("POST upload when directory does not exist returns 500");
+	try {
+		ServerConfig config = create_basic_config();
+		
+		// Set upload_path to a non-existent directory
+		config.locations[1].upload_path = "test/www_test/nonexistent_upload_dir";
+		
+		// Ensure the directory does NOT exist before testing
+		system("rm -rf test/www_test/nonexistent_upload_dir 2>/dev/null");
+		
+		RequestHandler handler(config);
+		
+		std::string boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+		std::string body = 
+			"--" + boundary + "\r\n"
+			"Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"Test content\r\n"
+			"--" + boundary + "--\r\n";
+			
+		std::string raw_req = 
+			"POST /uploads/ HTTP/1.1\r\n"
+			"Host: localhost\r\n"
+			"Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
+			"Content-Length: " + StringUtils::toString(body.length()) + "\r\n"
+			"\r\n" + body;
+
+		HttpRequest request(raw_req);
+		HttpResponse response = handler.handleRequest(request);
+		
+		// Should return 500 Internal Server Error when upload directory doesn't exist
+		// and cannot be created (since mkdir is commented out)
+		if (response.getStatus() != 500) {
+			throw std::runtime_error("Expected 500 for non-existent upload directory, got " + 
+			                        StringUtils::toString(response.getStatus()));
+		}
+		
+		// Verify error message contains directory-related information
+		std::string body_content = response.getBody();
+		bool has_error_msg = (body_content.find("directory") != std::string::npos || 
+		                     body_content.find("Directory") != std::string::npos ||
+		                     body_content.find("error") != std::string::npos);
+		
+		if (!has_error_msg) {
+			throw std::runtime_error("Error response should contain directory error message");
+		}
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
 int main() {
 	std::cout << BOLD << "========================================" << RESET << std::endl;
 	std::cout << BOLD << "  RequestHandler Unit Tests" << RESET << std::endl;
@@ -757,6 +812,7 @@ int main() {
 	test_special_characters_in_filename(runner);
 	test_upload_disk_full(runner);
 	test_multipart_with_multiple_parts(runner);
+	test_upload_directory_not_exist(runner);
 
 	runner.summary();
 	return runner.allPassed() ? 0 : 1;
