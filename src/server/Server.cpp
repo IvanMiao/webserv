@@ -360,14 +360,24 @@ void Server::_handle_client_write(int client_fd)
 		return;
 
 	ssize_t bytes_sent = send(client_fd, buffer.c_str(), buffer.length(), 0);
-	if (bytes_sent < 0)
+	if (bytes_sent > 0)
+	{
+		buffer.erase(0, bytes_sent);
+	}
+	else if (bytes_sent == 0)
+	{
+		// send() returning 0 is unusual and indicates an error
+		Logger::error("Send returned 0 on FD {}", client_fd);
+		_close_client(client_fd);
+		return;
+	}
+	// If bytes_sent == -1, wait for next EPOLLOUT (could be EAGAIN or other errors)
+	else
 	{
 		Logger::error("Send error on FD {}", client_fd);
 		_close_client(client_fd);
 		return;
 	}
-
-	buffer.erase(0, bytes_sent);
 
 	if (buffer.empty())
 	{

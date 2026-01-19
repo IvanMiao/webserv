@@ -67,16 +67,17 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 			}
 			// Otherwise, wait for next EPOLLOUT to continue writing
 		}
-		else if (written == 0 || (written == -1 && errno != EAGAIN && errno != EWOULDBLOCK))
+		else if (written == 0)
 		{
-			Logger::error("Failed to write to CGI stdin: {}", strerror(errno));
+			// write() returning 0 is unusual and indicates an error
+			Logger::error("CGI stdin write returned 0");
 			handler->closeStdin();
 			handler->markStdinClosed();
 			_remove_from_epoll(cgi_fd);
 			_cgi_fd_map.erase(cgi_fd);
 			client.cgi_input_fd = -1;
 		}
-		// If EAGAIN/EWOULDBLOCK, just wait for next EPOLLOUT
+		// If written == -1, wait for next EPOLLOUT (could be EAGAIN or other errors)
 	}
 	
 	// 2. Read from CGI Stdout (if this fd is output_fd)
@@ -86,10 +87,12 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
 		ssize_t bytes = read(cgi_fd, buffer, sizeof(buffer));
 
 		if (bytes > 0)
+		{
 			client.response_buffer.append(buffer, bytes);
+		}
 		else if (bytes == 0 || (events & EPOLLHUP))
 		{
-			// CGI finished
+			// CGI finished (EOF or hangup)
 			Logger::info("CGI stdout closed, processing response");
 			
 			// Wait for child
