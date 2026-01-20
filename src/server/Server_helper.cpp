@@ -32,20 +32,46 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
     }
 
     // 0. Pre-check for error events (Handle broken pipes/errors via epoll flags)
-    if (events & (EPOLLERR | EPOLLHUP))
+    if (events & EPOLLERR)
     {
-        // For output_fd, EPOLLHUP is expected when CGI finishes, 
-        // but for input_fd, it usually means the child closed stdin unexpectedly.
+        // EPOLLERR indicates a real error on the fd
         if (cgi_fd == client.cgi_input_fd)
         {
-            Logger::debug("CGI input pipe error or HUP");
+            Logger::debug("CGI input pipe error (EPOLLERR)");
             handler->closeStdin();
             handler->markStdinClosed();
             _remove_from_epoll(cgi_fd);
             _cgi_fd_map.erase(cgi_fd);
             client.cgi_input_fd = -1;
-            // No return here, check if we can still read from stdout
         }
+        else if (cgi_fd == client.cgi_output_fd)
+        {
+            Logger::error("CGI output pipe error (EPOLLERR)");
+            _remove_from_epoll(cgi_fd);
+            close(cgi_fd);
+            _cgi_fd_map.erase(cgi_fd);
+            client.cgi_output_fd = -1;
+            if (client.cgi_handler)
+                client.cgi_handler->markStdoutClosed();
+            delete client.cgi_handler;
+            client.cgi_handler = NULL;
+            client.response_buffer = HttpResponse::createErrorResponse(500).serialize();
+            client.state = CLIENT_WRITING_RESPONSE;
+            _modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
+            return;
+        }
+    }
+
+    // Handle EPOLLHUP separately (expected for input_fd when CGI closes stdin)
+    if ((events & EPOLLHUP) && cgi_fd == client.cgi_input_fd && client.cgi_input_fd != -1)
+    {
+        Logger::debug("CGI input pipe HUP");
+        handler->closeStdin();
+        handler->markStdinClosed();
+        _remove_from_epoll(cgi_fd);
+        _cgi_fd_map.erase(cgi_fd);
+        client.cgi_input_fd = -1;
+        // No return here, continue to check if we can read from stdout
     }
 
     // 1. Write to CGI Stdin
@@ -65,12 +91,12 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
         else
         {
             ssize_t written = write(cgi_fd, input.c_str() + client.cgi_write_offset, remaining);
-            
+
             if (written > 0)
             {
                 client.cgi_write_offset += written;
                 client.updateActivity();
-                
+
                 if (client.cgi_write_offset >= input.size())
                 {
                     handler->closeStdin();
@@ -89,7 +115,11 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
                 _cgi_fd_map.erase(cgi_fd);
                 client.cgi_input_fd = -1;
             }
-            // If written == -1, we do NOTHING. We trust epoll to tell us again next time.
+            else // written == -1
+            {
+                // Non-blocking write not ready, wait for next EPOLLOUT event
+                Logger::debug("CGI stdin write returned -1, waiting for next epoll event");
+            }
         }
     }
     
@@ -116,7 +146,7 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
             if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
             {
                 Logger::error("CGI process failed or exited with status: {}", WEXITSTATUS(status));
-                client.response_buffer = HttpResponse::createErrorResponse(500).serialize(); // [TUDO]500 Internal Server Error
+                client.response_buffer = HttpResponse::createErrorResponse(500).serialize(); // 500 Internal Server Error
             }
             else
             {
@@ -166,7 +196,11 @@ void Server::_handle_cgi_data(int cgi_fd, uint32_t events)
             client.state = CLIENT_WRITING_RESPONSE;
             _modify_epoll(client_fd, EPOLLIN | EPOLLOUT);
         }
-        // If bytes == -1, we do NOTHING. Wait for next epoll event.
+        else // bytes == -1
+        {
+            // Non-blocking read not ready, wait for next EPOLLIN event
+            Logger::debug("CGI stdout read returned -1, waiting for next epoll event");
+        }
     }
 }
 

@@ -360,14 +360,21 @@ void Server::_handle_client_write(int client_fd)
 		return;
 
 	ssize_t bytes_sent = send(client_fd, buffer.c_str(), buffer.length(), 0);
-	if (bytes_sent < 0)
+	if (bytes_sent > 0)
+	{
+		buffer.erase(0, bytes_sent);
+	}
+	else if (bytes_sent == 0)
+	{
+		// No data sent, wait for next EPOLLOUT event
+		return;
+	}
+	else // bytes_sent == -1
 	{
 		Logger::error("Send error on FD {}", client_fd);
 		_close_client(client_fd);
 		return;
 	}
-
-	buffer.erase(0, bytes_sent);
 
 	if (buffer.empty())
 	{
