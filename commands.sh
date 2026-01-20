@@ -92,3 +92,19 @@ curl -i -X POST \
   --data "$(printf 'A%.0s' {1..100})" \
   http://localhost:8080/uploads/
 
+## test DELETE
+echo "test" > test_delete.txt
+curl -X POST -F "file=@test_delete.txt" http://localhost:8080/uploads/
+
+curl -i -X DELETE http://localhost:8080/uploads/test_delete.txt
+
+curl -i http://localhost:8080/uploads/test_delete.txt
+
+## test DOWNLOAD
+echo "test" > my_file.txt
+curl -X POST -F "file=@my_file.txt" http://localhost:8080/uploads/
+
+curl -o downloaded_file.txt http://localhost:8080/uploads/my_file.txt
+
+diff my_file.txt downloaded_file.txt
+
