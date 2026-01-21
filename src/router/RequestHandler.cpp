@@ -44,7 +44,9 @@ HttpResponse RequestHandler::handleRequest(Client& client)
     std::string file_path = _buildFilePath(decoded_path, *location_config);
     if (_isCgiRequest(file_path, *location_config))
     {
-        if (!FileHandler::file_exists(file_path))
+        // For GET/HEAD requests, the CGI script file must exist
+        // For POST requests, the target file doesn't need to exist (upload/creation scenario)
+        if ((method == "GET" || method == "HEAD") && !FileHandler::file_exists(file_path))
             return ErrorHandler::get_error_page(404, _config);
 
         // Start Async CGI
@@ -54,61 +56,119 @@ HttpResponse RequestHandler::handleRequest(Client& client)
         return HttpResponse(); 
     }
 
-    // Fallback to standard synchronous processing
+    // Fallback to standard processing
     return handleRequest(request);
 }
 
+// standard processing
 HttpResponse RequestHandler::handleRequest(const HttpRequest& request)
 {
+    Logger::debug("============================================");
     Logger::debug("START handleRequest");
+    Logger::debug("============================================");
+    
     std::string method = request.getMethod();
-    Logger::debug("URI = {}, Method = {}", request.getPath(), method);
+    std::string raw_uri = request.getPath();
     
-    // SECURITY: Decode URL BEFORE path traversal check
+    Logger::debug("Raw URI: {}", raw_uri);
+    Logger::debug("Method: {}", method);
+    
+    // STEP 1: URL Decode (SECURITY)
+    // Decode URL BEFORE path traversal check
     // This prevents bypass via encoded sequences like %2e%2e%2f (../)
-    std::string decoded_path = StringUtils::urlDecode(request.getPath());
+    std::string decoded_path = StringUtils::urlDecode(raw_uri);
+    Logger::debug("Decoded path: {}", decoded_path);
     
+    // STEP 2: Path Traversal Check (SECURITY)
     // Check for path traversal attacks BEFORE other validations
     // This ensures 403 is returned for traversal attempts, not 405
     if (decoded_path.find("..") != std::string::npos)
     {
-        Logger::debug("Path traversal detected in decoded path, returning 403");
+        Logger::debug("SECURITY: Path traversal detected, returning 403");
         return ErrorHandler::get_error_page(403, _config);
     }
-    
+  
+    // STEP 3: Find Matching Location
     const LocationConfig* location_config = _config.findLocation(decoded_path);
-
+    
     if (!location_config)
+    {
+        Logger::debug("ERROR: No location matched for path: {}", decoded_path);
         return ErrorHandler::get_error_page(404, _config);
-
+    }
+    
+    Logger::debug("Matched location: {}", location_config->path);
+    Logger::debug("Location root: {}", location_config->root);
+    Logger::debug("Allowed methods: [{}]", _formatMethodList(location_config->allow_methods));
+    
+    // STEP 4: Method Permission Check
     if (!location_config->isMethodAllowed(method))
     {
-        Logger::debug("Method not allowed: {}", method);
+        Logger::debug("ERROR: Method {} not allowed for location {}", 
+                     method, location_config->path);
         return ErrorHandler::get_error_page(405, _config);
     }
-
+    
+    // STEP 5: Redirect Rule Check
     if (location_config->hasRedirect())
     {
+        Logger::debug("REDIRECT: Location has redirect rule");
+        Logger::debug("  Code: {}", location_config->redirect_code);
+        Logger::debug("  URL: {}", location_config->redirect_url);
+        
         return HttpResponse::createRedirectResponse(
             location_config->redirect_code,
             location_config->redirect_url
         );
     }
+    
+    // STEP 6: Request Body Size Check
+    size_t content_length = request.getContentLength();
+    
+    // For chunked requests, Content-Length header is not present/valid
+    // We must check the actual received body size
+    if (request.isChunked())
+        content_length = request.getBody().length();
 
-    if (request.getContentLength() > _config.client_max_body_size)
+    if (content_length > location_config->client_max_body_size)
+    {
+        Logger::debug("ERROR: Request body too large");
+        Logger::debug("  Size: {} bytes", content_length);
+        Logger::debug("  Limit: {} bytes", location_config->client_max_body_size);
         return ErrorHandler::get_error_page(413, _config);
-
+    }
+    
+    // STEP 7: Route to Method Handler
+    Logger::debug("Routing to method handler: {}", method);
+    
     if (method == "GET" || method == "HEAD")
         return _handleGet(request, *location_config, decoded_path);
     else if (method == "POST")
-    {
-        Logger::debug("Routing to _handlePost");
         return _handlePost(request, *location_config, decoded_path);
-    }
     else if (method == "DELETE")
         return _handleDelete(request, *location_config, decoded_path);
-
+    
+    // Method not implemented
+    Logger::debug("ERROR: Method not implemented: {}", method);
     return ErrorHandler::get_error_page(501, _config);
+}
+
+// ============================================================================
+// Helper: Format method list for logging
+// ============================================================================
+std::string RequestHandler::_formatMethodList(const std::vector<std::string>& methods)
+{
+    if (methods.empty())
+        return "NONE";
+    
+    std::string result;
+    for (size_t i = 0; i < methods.size(); ++i)
+    {
+        if (i > 0)
+            result += ", ";
+        result += methods[i];
+    }
+    return result;
 }
 
 // ============================================================================
@@ -128,8 +188,24 @@ HttpResponse RequestHandler::_handleGet(const HttpRequest& request,
     if (!FileHandler::file_exists(file_path))
         return ErrorHandler::get_error_page(404, _config);
 
+    // Directory Auto-Redirect
     if (FileHandler::is_directory(file_path))
     {
+        // Check if request path ends with /
+        std::string uri = request.getPath();
+        if (!uri.empty() && uri[uri.length() - 1] != '/')
+        {
+            // If accessing directory but no trailing slash, redirect
+            std::string redirect_uri = uri + "/";
+            
+            // Preserve query string
+            if (!request.getQuery().empty())
+                redirect_uri += "?" + request.getQuery();
+            
+            return HttpResponse::createRedirectResponse(301, redirect_uri);
+        }
+        
+        // With trailing slash, handle directory normally
         HttpResponse response = _serve_directory(file_path, location_config);
         if (request.getMethod() == "HEAD")
             response.setBody("");
@@ -152,6 +228,7 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
                                          const LocationConfig& location_config,
                                          const std::string& decoded_path)
 {
+    Logger::debug("Routing to _handlePost");
     Logger::debug("Method = {}, Path = {}", request.getMethod(), request.getPath());
     Logger::debug("upload_enable = {}", (location_config.upload_enable ? "true" : "false"));
     
@@ -165,8 +242,13 @@ HttpResponse RequestHandler::_handlePost(const HttpRequest& request,
     // Build file path
     std::string file_path = _buildFilePath(decoded_path, location_config);
 
-    // Other POST cases not allowed
-    return ErrorHandler::get_error_page(405, _config);
+    // Non-upload, non-CGI POST: Return 200 OK (accepting the POST data)
+    // This handles cases like /post_body which just needs to accept POST requests
+    HttpResponse response;
+    response.setStatus(200);
+    response.setHeader("Content-Type", "text/plain");
+    response.setBody("POST request received\n");
+    return response;
 }
 
 /**
@@ -177,7 +259,7 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
                                            const LocationConfig& location_config,
                                            const std::string& decoded_path)
 {
-    (void)request;  // Unused but kept for consistent interface
+    (void)request;  // Unused but kept for the same interface
     // Path traversal check is now done in handleRequest() before method validation
     std::string file_path = _buildFilePath(decoded_path, location_config);
 
@@ -217,17 +299,61 @@ HttpResponse RequestHandler::_handleDelete(const HttpRequest& request,
 
 /**
  * Convert URI path to filesystem path
- * Uses Nginx 'root' directive semantics: root + full URI path
- * Example: root ./www, URI /uploads/file.txt -> ./www/uploads/file.txt
+ * 
+ * Two modes:
+ * 1. If 'alias' is defined: Use alias semantics (remove location prefix from URI)
+ *    Example: location /uploads { alias ./www/site_8080/uploads; }
+ *    Request: /uploads/file.txt -> ./www/site_8080/uploads/file.txt
+ * 
+ * 2. If only 'root' is defined: Use root semantics (append full URI to root)
+ *    Example: location / { root ./www; }
+ *    Request: /index.html -> ./www/index.html
+ * 
  * Note: uri_path is expected to already be URL-decoded by handleRequest()
  */
 std::string RequestHandler::_buildFilePath(const std::string& uri_path,
                                            const LocationConfig& location_config)
 {
-    // Path is already decoded in handleRequest() - no need to decode again
-    return location_config.root + uri_path;
-}
+    std::string final_path;
 
+    // Print initial information
+    Logger::debug("--- Building File Path ---");
+    Logger::debug("URI Path: '{}'", uri_path);
+    Logger::debug("Location Path: '{}'", location_config.path);
+    Logger::debug("Location Root: '{}'", location_config.root);
+    Logger::debug("Location Alias: '{}'", location_config.alias);
+
+    // Prefer alias over root if both are defined
+    if (!location_config.alias.empty())
+    {
+        std::string relative_path = uri_path;
+        const std::string& location_path = location_config.path;
+        
+        if (uri_path.find(location_path) == 0)
+        {
+            relative_path = uri_path.substr(location_path.length());
+            
+            if (relative_path.empty())
+                relative_path = "/";
+            else if (relative_path[0] != '/')
+                relative_path = "/" + relative_path;
+        }
+        
+        final_path = location_config.alias + relative_path;
+        Logger::debug("Using ALIAS logic. Relative: '{}' -> Final: '{}'", relative_path, final_path);
+    }
+    else
+    {
+        // Root semantics: append full URI to root
+        final_path = location_config.root + uri_path;
+        Logger::debug("Using ROOT logic. Final: '{}'", final_path);
+    }
+
+    Logger::debug("Resulting Path: '{}'", final_path);
+    Logger::debug("--------------------------");
+
+    return final_path;
+}
 
 // Check if file is a CGI script based on configured extension
 bool RequestHandler::_isCgiRequest(const std::string& file_path,
@@ -244,9 +370,7 @@ bool RequestHandler::_isCgiRequest(const std::string& file_path,
     return (ext == location_config.cgi_extension);
 }
 
-/**
- * Serve static file
- */
+// Serve static file
 HttpResponse RequestHandler::_serve_file(const std::string& file_path)
 {
     HttpResponse response = FileHandler::serve_file(file_path);
@@ -255,9 +379,7 @@ HttpResponse RequestHandler::_serve_file(const std::string& file_path)
     return response;
 }
 
-/**
- * Serve directory (index file or autoindex)
- */
+// Serve directory (index file or autoindex)
 HttpResponse RequestHandler::_serve_directory(const std::string& dir_path,
                                               const LocationConfig& location_config)
 {

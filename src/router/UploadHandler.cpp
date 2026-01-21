@@ -374,7 +374,7 @@ HttpResponse UploadHandler::_save_file(const std::string& file_path,
     }
     
     HttpResponse response;
-    response.setStatus(200);  // Success
+    response.setStatus(200);
     return response;
 }
 
@@ -407,10 +407,10 @@ bool UploadHandler::_ensure_directory_exists(const std::string& dir_path)
     if (FileHandler::file_exists(dir_path) && FileHandler::is_directory(dir_path))
         return true;
     
-    if (mkdir(dir_path.c_str(), 0755) == 0) // [TODO]: the function is forbidden?
-        return true;
+    // if (mkdir(dir_path.c_str(), 0755) == 0)
+    //     return true;
     
-    Logger::error("Failed to create directory: " + dir_path);
+    Logger::error("Failed to find directory: " + dir_path);
     return false;
 }
 

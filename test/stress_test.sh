@@ -28,11 +28,8 @@ fi
 
 # Test 1: Basic GET flood
 echo -e "${YELLOW}[Test 1] GET Flood${NC}"
-if command -v ab &> /dev/null; then
-    ab -n "$REQUESTS" -c "$CONCURRENCY" -q "$URL" 2>&1 | grep -E "(Requests per second|Failed requests|Time taken)"
-elif command -v siege &> /dev/null; then
-    siege -b -c "$CONCURRENCY" -r $((REQUESTS / CONCURRENCY)) -q "$URL" 2>&1 | head -10
-fi
+ab -n "$REQUESTS" -c "$CONCURRENCY" -q "$URL" 2>&1 | grep -E "(Requests per second|Failed requests|Time taken)"
+siege -b -c "$CONCURRENCY" -r $((REQUESTS / CONCURRENCY)) -q "$URL" 2>&1 | head -10
 echo ""
 
 # Test 2: Keepalive connections

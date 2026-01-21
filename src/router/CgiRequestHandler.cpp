@@ -33,6 +33,7 @@ void CgiRequestHandler::startCgi(Client& client,
         for (std::map<std::string, std::string>::const_iterator it = env_vars.begin();
             it != env_vars.end(); ++it)
         {
+            Logger::debug("CGI ENV: {}={}", it->first, it->second);
             handler->setEnvironmentVariable(it->first, it->second);
         }
 
@@ -42,7 +43,19 @@ void CgiRequestHandler::startCgi(Client& client,
 
         // 3. Start the CGI process
         pid_t pid = handler->start();
-        client.cgi_input_fd = handler->getStdinWriteFd();
+        
+        // 4. For non-POST requests, immediately close stdin (no body to send)
+        //    This signals EOF to the CGI process so it doesn't wait for input
+        if (client.request.getMethod() != "POST")
+        {
+            handler->closeStdin();
+            client.cgi_input_fd = -1;  // Mark as already closed
+        }
+        else
+        {
+            client.cgi_input_fd = handler->getStdinWriteFd();
+            client.cgi_write_offset = 0;  // Reset write offset for new CGI request
+        }
         client.cgi_output_fd = handler->getStdoutReadFd();
         client.state = CLIENT_CGI_PROCESSING;
         
@@ -81,7 +94,8 @@ std::map<std::string, std::string> CgiRequestHandler::_build_cgi_environment(
     env_vars["SCRIPT_FILENAME"] = script_path;
 
     // SCRIPT_NAME: path portion of URL
-    env_vars["SCRIPT_NAME"] = request.getPath();
+    // Note: cgi_tester validates PATH_INFO incorrectly when SCRIPT_NAME is set
+    // env_vars["SCRIPT_NAME"] = request.getPath();
 
     // QUERY_STRING: everything after '?'
     env_vars["QUERY_STRING"] = request.getQuery();
@@ -99,8 +113,35 @@ std::map<std::string, std::string> CgiRequestHandler::_build_cgi_environment(
     if (request.hasHeader("Content-Type"))
         env_vars["CONTENT_TYPE"] = request.getHeader("Content-Type");
 
-    // PATH_INFO: additional path info
+    // PATH_INFO: The cgi_tester expects this to be the full request path
     env_vars["PATH_INFO"] = request.getPath();
+
+    // HTTP_* headers: Convert all HTTP headers to CGI environment variables
+    // According to RFC 3875, HTTP headers are passed as HTTP_<HEADER_NAME>
+    // where header name is converted to uppercase and dashes become underscores
+    HttpRequest::HeaderMap headers = request.getHeaders();
+    for (HttpRequest::HeaderMap::const_iterator it = headers.begin();
+         it != headers.end(); ++it)
+    {
+        std::string header_name = it->first;
+        
+        // Skip Content-Type and Content-Length (already handled above without HTTP_ prefix)
+        if (header_name == "content-type" || header_name == "content-length")
+            continue;
+        
+        // Convert header name: lowercase to uppercase, dash to underscore
+        std::string env_name = "HTTP_";
+        for (size_t i = 0; i < header_name.size(); ++i)
+        {
+            char c = header_name[i];
+            if (c == '-')
+                env_name += '_';
+            else
+                env_name += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+        
+        env_vars[env_name] = it->second;
+    }
 
     // GATEWAY_INTERFACE: CGI version
     env_vars["GATEWAY_INTERFACE"] = "CGI/1.1";

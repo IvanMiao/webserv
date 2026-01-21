@@ -102,7 +102,9 @@ private:
     std::string _buildFilePath(const std::string& uri_path,
                                const LocationConfig& location_config);
 
-
+    // Format method list for logging
+    std::string _formatMethodList(const std::vector<std::string>& methods);
+    
     /**
      * Check if the given path corresponds to a CGI script
      * @param file_path Full filesystem path

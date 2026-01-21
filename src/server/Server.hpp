@@ -93,7 +93,7 @@ protected:
 	void	_close_client(int client_fd);
 
 	void	_process_request(int client_fd);
-	bool		_should_keep_alive(const HttpRequest& request) const;
+	bool	_should_keep_alive(const HttpRequest& request) const;
 };
 
 

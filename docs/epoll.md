@@ -1,3 +1,294 @@
+
+# Epoll Mechanism and Its Application
+
+## Kernel Space vs User Space — Understanding I/O
+
+To understand I/O, we must first understand how an operating system separates privileges.
+
+- **Kernel Space**: The core of the operating system. It has the highest privileges and can directly interact with hardware (NIC, disk, memory).
+- **User Space**: Where applications (such as a web server) run. It has restricted privileges and cannot access hardware directly.
+
+When a network card receives data, the data is first placed into a **kernel-managed buffer**.  
+If a user-space program wants to read this data, it must issue a **system call** (such as `read` or `recv`).  
+For safety reasons, the kernel **copies data from kernel space into user space**. This operation is known as **data copying**.
+
+---
+
+## Plot 1 — Kernel/User Space Data Flow
+
+```text
+┌──────────────┐
+│   NIC (HW)   │
+└──────┬───────┘
+       │  (DMA)
+       ▼
+┌─────────────────────────┐
+│     Kernel Space        │
+│ ┌─────────────────────┐│
+│ │ Socket RX Buffer    ││
+│ └─────────┬───────────┘│
+└───────────│─────────────┘
+            │ copy
+            ▼
+┌─────────────────────────┐
+│     User Space          │
+│ ┌─────────────────────┐│
+│ │ read() / recv()     ││
+│ └─────────────────────┘│
+└─────────────────────────┘
+````
+
+**Key points**:
+
+* User programs cannot directly access kernel memory
+* Every `read` involves a kernel → user copy
+* `epoll` optimizes **when** to read, not **how** data is copied
+
+---
+
+## Blocking I/O
+
+In blocking I/O, a thread attempting to read from a socket may be put to sleep if no data is available.
+
+```text
+Thread
+  |
+  | read(fd1)  ──> BLOCK
+  |               waiting
+  |               ↓
+  |           data arrives
+  |<────────── wake up
+```
+
+**Problem**: One blocked socket prevents the thread from handling other clients.
+
+---
+
+## I/O Multiplexing and the Birth of Epoll
+
+To handle thousands of concurrent connections efficiently, operating systems introduced **I/O multiplexing**, allowing one thread to monitor multiple file descriptors (FDs).
+
+Early solutions like `select` and `poll` require:
+
+* Copying the entire FD set from user space to kernel space every call
+* Scanning all FDs linearly
+
+This leads to **O(N)** complexity.
+
+Linux introduced **epoll** (kernel 2.6), which avoids these problems through an event-driven design.
+
+---
+
+## Plot 2 — Blocking I/O vs Epoll
+
+### Blocking I/O (Inefficient)
+
+```text
+Thread
+  |
+  | read(fd1) ──> BLOCK
+  |
+  | read(fd2) ──> BLOCK
+```
+
+### Epoll (Efficient)
+
+```text
+Thread
+  |
+  | epoll_wait()
+  |    |
+  |    |---- fd1 READY
+  |    |---- fd7 READY
+  |    |---- fd20 READY
+  |
+  | handle(fd1)
+  | handle(fd7)
+  | handle(fd20)
+```
+
+---
+
+## Epoll Internal Design
+
+When `epoll_create` is called, the kernel creates an **eventpoll** object.
+
+It internally maintains:
+
+* **Red-Black Tree**: stores *all monitored file descriptors*
+* **Ready List (Linked List)**: stores *only ready file descriptors*
+
+---
+
+## Plot 3 — Epoll Kernel Data Structures
+
+```text
+                epoll_fd
+                   │
+          ┌────────▼────────┐
+          │   eventpoll     │
+          └────────┬────────┘
+                   │
+      ┌────────────┴────────────┐
+      │                           │
+┌──────────────┐        ┌─────────────────┐
+│ Red-Black    │        │ Ready List      │
+│ Tree         │        │ (Linked List)   │
+│ (ALL fds)    │        │ (READY fds only)│
+└──────────────┘        └─────────────────┘
+   fd1 fd2 fd3               fd7 → fd20
+```
+
+**Key insight**:
+
+> `epoll_wait` does NOT scan all file descriptors
+> It only checks the **ready list**
+
+---
+
+## Plot 4 — Epoll Callback Workflow
+
+```text
+NIC receives data
+     │
+     ▼
+Hardware interrupt
+     │
+     ▼
+Kernel network stack
+     │
+     ▼
+ep_poll_callback(fd)
+     │
+     ▼
+fd added to Ready List
+     │
+     ▼
+epoll_wait() returns
+```
+
+This callback-based mechanism allows epoll to scale efficiently with active connections.
+
+---
+
+## Epoll in This WebServer Project (Reactor Pattern)
+
+This project implements a **Reactor architecture** using `epoll`.
+
+---
+
+## Plot 5 — Reactor Event Flow
+
+```text
+            ┌─────────────┐
+            │ epoll_wait  │
+            └──────┬──────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+     EPOLLIN               EPOLLOUT
+        │                     │
+        ▼                     ▼
+ read request           write response
+        │                     │
+        └──────────┬──────────┘
+                   ▼
+             close / keep-alive
+```
+
+---
+
+## Project Event Flow Summary
+
+1. Listening sockets are registered with `EPOLLIN`
+2. `epoll_wait` blocks until events occur
+3. New connections are accepted and set non-blocking
+4. Client sockets:
+
+   * `EPOLLIN`: read request
+   * `EPOLLOUT`: send response
+5. After response is sent, the socket is closed and removed from epoll
+
+This design ensures:
+
+* No blocking on slow clients
+* One thread handles many connections
+* Proper lifecycle management of file descriptors
+
+---
+
+## Plot 6 — Level-Triggered (LT) Behavior
+
+```text
+Socket Buffer:
+[ DATA ][ DATA ][ DATA ]
+
+epoll_wait → EPOLLIN
+read partial data
+
+Socket Buffer:
+[ DATA ][ DATA ]
+
+epoll_wait → EPOLLIN (again)
+```
+
+**Conclusion**:
+In Level Triggered mode, epoll continues to notify as long as data remains unread.
+
+---
+
+## Epoll API Summary
+
+### `epoll_create`
+
+```c
+int epoll_create(int size);
+```
+
+* Allocates an `eventpoll` object in kernel space
+* Initializes the Red-Black Tree and Ready List
+* `size` is ignored (must be > 0)
+
+---
+
+### `epoll_ctl`
+
+```c
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+```
+
+* Adds, modifies, or removes FDs from epoll
+* Registers kernel callbacks on ADD
+* Modifies interest events on MOD
+
+---
+
+### `epoll_wait`
+
+```c
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+```
+
+* Blocks if Ready List is empty
+* Returns only READY events
+* Time complexity depends on active connections, not total connections
+
+---
+
+## Final Takeaways
+
+* `epoll` is event-driven, not polling-based
+* Performance scales with **active connections**
+* Ideal for high-concurrency servers (C10K+)
+* Reactor pattern cleanly separates read, process, and write phases
+
+---
+
+```
+```
+
+
+
 # Epoll 机制及其应用
 
 ## 内核态和用户态 —— 理解 I/O

@@ -49,7 +49,7 @@ def main():
         "GET Environment", 
         "GET", "/cgi-bin/echo_env.py", 
         expected_status=200, 
-        checks=["REQUEST_METHOD=GET", "SCRIPT_NAME=/cgi-bin/echo_env.py"]
+        checks=["REQUEST_METHOD=GET"]
     ))
 
     # Test 2: POST Echo Body

@@ -11,7 +11,8 @@ Client::Client()
 	requests_count(0),
 	cgi_handler(NULL),
 	cgi_input_fd(-1),
-	cgi_output_fd(-1)
+	cgi_output_fd(-1),
+	cgi_write_offset(0)
 { }
 
 Client::Client(int fd, sockaddr_in addr, const ServerConfig* config)
@@ -24,7 +25,8 @@ Client::Client(int fd, sockaddr_in addr, const ServerConfig* config)
 	requests_count(0),
 	cgi_handler(NULL),
 	cgi_input_fd(-1),
-	cgi_output_fd(-1)
+	cgi_output_fd(-1),
+	cgi_write_offset(0)
 { }
 
 Client::~Client()

@@ -102,6 +102,8 @@ public:
 
     void closeStdin();      // Call when finished writing input
     void closePipes();      // Call when finished everything or error
+    void markStdinClosed()  { _pipes.input_pipe[1] = -1; }   // Mark as externally closed
+    void markStdoutClosed() { _pipes.output_pipe[0] = -1; }  // Mark as externally closed
 
 private:
     // Helper Structures

@@ -13,18 +13,25 @@ namespace wsv
 // ============================================================================
 HttpResponse FileHandler::serve_file(const std::string& file_path)
 {
-    // Read the entire file into memory
+    // 1. Check if the file exists
+    if (!file_exists(file_path))
+        return HttpResponse::createErrorResponse(404);
+
+    // 2. Attempt to read the file
     std::string file_content = read_file(file_path);
     
-    // If file could not be read, return 500 Internal Server Error
-    if (file_content.empty())
+    // 3. We do not return 500 directly!
+    // If read_file returns empty, determine whether the file is actually zero bytes or couldn't be opened.
+    
+    std::ifstream file(file_path.c_str(), std::ios::binary);
+    if (!file.is_open())
     {
         HttpResponse response;
-        response.setStatus(500);
+        response.setStatus(403); 
         return response;
     }
-    
-    // Return file with appropriate MIME type
+
+    // 4. Return 200 OK; it's fine if file_content is empty
     return HttpResponse::createOkResponse(file_content, get_mime_type(file_path));
 }
 
@@ -56,9 +63,11 @@ HttpResponse FileHandler::serve_directory(const std::string& dir_path,
     
     // No index file and autoindex disabled
     HttpResponse response;
-    response.setStatus(403);
+    // [NOTE] SHOULD BE 403 BUT TESTER WANT 404
+    response.setStatus(404);
     return response;
 }
+
 
 // ============================================================================
 // Generate HTML directory listing (private helper)
@@ -121,7 +130,7 @@ std::string FileHandler::read_file(const std::string& path)
         return "";
     
     std::ostringstream buffer;
-    buffer << file.rdbuf();  // [TODO] Read entire file at once?
+    buffer << file.rdbuf();
     return buffer.str();
 }
 

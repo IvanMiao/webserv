@@ -3,9 +3,8 @@ A Nginx-like webserv in C++
 
 ## TODO
 
-1. WRITE_BUFFER, write, send
-
-2. 
+1. HttpRequest -> _tryParseHeaders:
+	`line_end > MAX_HEADER_SIZE` should also check the total header's length
 
 ## Workflow
 

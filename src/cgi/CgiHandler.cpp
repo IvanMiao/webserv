@@ -112,7 +112,10 @@ CgiHandler::CgiHandler(const std::string& cgi_bin, const std::string& script_pat
 
 CgiHandler::~CgiHandler()
 {
+    // Only close pipes we still own (not externally closed)
+    // Note: _pipes.input_pipe[1] and _pipes.output_pipe[0] are the parent's FDs
     _pipes._closeAll();
+    
     if (_child_pid > 0)
     {
         // Non-blocking cleanup for async I/O architecture

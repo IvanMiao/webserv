@@ -65,7 +65,8 @@ private:
     std::string _body;
     size_t _content_length;
     size_t _body_received;
-    
+    size_t _total_headers_size; // Total size of headers parsed so far
+
     // Parsing buffer (holds incomplete data)
     std::string _buffer;
     
@@ -149,18 +150,11 @@ private:
 
 
     // ===== Request Line Parsing =====
-
-    // Parse request line: "GET /path HTTP/1.1"
     void _parseRequestLine(const std::string& line);
-    
-    //Parse URL into path and query string
-    // Example: "/api/users?id=123" -> path="/api/users", query="id=123"
     void _parseUrl(const std::string& url);
     
 
     // ===== Header Parsing =====
-    
-    //Parse a single header line: "Key: Value"
     void _parseHeaderLine(const std::string& line);
 
 
@@ -202,18 +196,10 @@ private:
 
     // ===== Validation Methods =====
     
-    /**
-     * Validate HTTP method
-     * @param method Method string to validate
-     * @return true if method is GET, POST, DELETE, HEAD, or PUT
-     */
+    // true if method is GET, POST, DELETE, HEAD
     bool _validateMethod(const std::string& method) const;
     
-    /**
-     * Validate HTTP version
-     * @param version Version string to validate
-     * @return true if version is HTTP/1.0 or HTTP/1.1
-     */
+    // true if version is HTTP/1.0 or HTTP/1.1
     bool _validateVersion(const std::string& version) const;
 
 };

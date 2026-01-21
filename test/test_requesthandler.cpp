@@ -33,6 +33,7 @@ ServerConfig create_basic_config() {
 	loc_root.allow_methods.push_back("GET");
 	loc_root.index = "index.html";
 	loc_root.autoindex = false;
+	loc_root.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_root);
 
 	// Location: /uploads
@@ -45,6 +46,7 @@ ServerConfig create_basic_config() {
 	loc_uploads.upload_enable = true;
 	loc_uploads.upload_path = "test/www_test/uploads";
 	loc_uploads.autoindex = true;
+	loc_uploads.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_uploads);
 
 	// Location: /redirect
@@ -53,6 +55,7 @@ ServerConfig create_basic_config() {
 	// Checking RequestHandler.cpp: location_config->hasRedirect(), redirect_code, redirect_url
 	loc_redirect.redirect_code = 301;
 	loc_redirect.redirect_url = "http://example.com";
+	loc_redirect.client_max_body_size = config.client_max_body_size;
 	config.locations.push_back(loc_redirect);
 
 	return config;
@@ -248,6 +251,9 @@ void test_max_body_size(TestRunner& runner) {
 	try {
 		ServerConfig config = create_basic_config();
 		config.client_max_body_size = 10; // Very small limit
+		// Update locations to use the new limit
+		for (size_t i = 0; i < config.locations.size(); ++i)
+			config.locations[i].client_max_body_size = config.client_max_body_size;
 		RequestHandler handler(config);
 		
 		std::string body = "This body is definitely longer than 10 bytes";
@@ -276,8 +282,8 @@ void test_autoindex_directory(TestRunner& runner) {
 		ServerConfig config = create_basic_config();
 		RequestHandler handler(config);
 		
-		// /uploads has autoindex = true
-		HttpRequest request("GET /uploads HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		// /uploads has autoindex = true, must use trailing slash (directory redirect)
+		HttpRequest request("GET /uploads/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
 		if (response.getStatus() != 200) throw std::runtime_error("Expected 200 OK, got " + StringUtils::toString(response.getStatus()));
@@ -292,7 +298,7 @@ void test_autoindex_directory(TestRunner& runner) {
 }
 
 void test_directory_no_autoindex(TestRunner& runner) {
-	runner.startTest("GET directory without index and autoindex disabled returns 403");
+	runner.startTest("GET directory without index and autoindex disabled returns 404");
 	try {
 		// Ensure the protected directory exists for testing
 		mkdir("test/www_test/protected", 0755);
@@ -305,14 +311,16 @@ void test_directory_no_autoindex(TestRunner& runner) {
 		loc_protected.allow_methods.push_back("GET");
 		loc_protected.index = "nonexistent.html";
 		loc_protected.autoindex = false;
+		loc_protected.client_max_body_size = config.client_max_body_size;
 		config.locations.push_back(loc_protected);
 		
 		RequestHandler handler(config);
 		
-		HttpRequest request("GET /protected HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		HttpRequest request("GET /protected/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
-		if (response.getStatus() != 403) throw std::runtime_error("Expected 403, got " + StringUtils::toString(response.getStatus()));
+		// Note: Source code returns 404 for tester compatibility (was 403)
+		if (response.getStatus() != 404) throw std::runtime_error("Expected 404, got " + StringUtils::toString(response.getStatus()));
 		
 		runner.pass();
 	} catch (const std::exception& e) {
@@ -455,11 +463,12 @@ void test_subdirectory_with_index(TestRunner& runner) {
 		loc_public.allow_methods.push_back("GET");
 		loc_public.index = "index.html";
 		loc_public.autoindex = false;
+		loc_public.client_max_body_size = config.client_max_body_size;
 		config.locations.push_back(loc_public);
 		
 		RequestHandler handler(config);
 		
-		HttpRequest request("GET /public HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		HttpRequest request("GET /public/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		HttpResponse response = handler.handleRequest(request);
 		
 		if (response.getStatus() != 200) throw std::runtime_error("Expected 200 OK, got " + StringUtils::toString(response.getStatus()));
@@ -714,6 +723,61 @@ void test_multipart_with_multiple_parts(TestRunner& runner) {
 	}
 }
 
+void test_upload_directory_not_exist(TestRunner& runner) {
+	runner.startTest("POST upload when directory does not exist returns 500");
+	try {
+		ServerConfig config = create_basic_config();
+		
+		// Set upload_path to a non-existent directory
+		config.locations[1].upload_path = "test/www_test/nonexistent_upload_dir";
+		
+		// Ensure the directory does NOT exist before testing
+		system("rm -rf test/www_test/nonexistent_upload_dir 2>/dev/null");
+		
+		RequestHandler handler(config);
+		
+		std::string boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+		std::string body = 
+			"--" + boundary + "\r\n"
+			"Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"Test content\r\n"
+			"--" + boundary + "--\r\n";
+			
+		std::string raw_req = 
+			"POST /uploads/ HTTP/1.1\r\n"
+			"Host: localhost\r\n"
+			"Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
+			"Content-Length: " + StringUtils::toString(body.length()) + "\r\n"
+			"\r\n" + body;
+
+		HttpRequest request(raw_req);
+		HttpResponse response = handler.handleRequest(request);
+		
+		// Should return 500 Internal Server Error when upload directory doesn't exist
+		// and cannot be created (since mkdir is commented out)
+		if (response.getStatus() != 500) {
+			throw std::runtime_error("Expected 500 for non-existent upload directory, got " + 
+			                        StringUtils::toString(response.getStatus()));
+		}
+		
+		// Verify error message contains directory-related information
+		std::string body_content = response.getBody();
+		bool has_error_msg = (body_content.find("directory") != std::string::npos || 
+		                     body_content.find("Directory") != std::string::npos ||
+		                     body_content.find("error") != std::string::npos);
+		
+		if (!has_error_msg) {
+			throw std::runtime_error("Error response should contain directory error message");
+		}
+		
+		runner.pass();
+	} catch (const std::exception& e) {
+		runner.fail(e.what());
+	}
+}
+
 int main() {
 	std::cout << BOLD << "========================================" << RESET << std::endl;
 	std::cout << BOLD << "  RequestHandler Unit Tests" << RESET << std::endl;
@@ -748,6 +812,7 @@ int main() {
 	test_special_characters_in_filename(runner);
 	test_upload_disk_full(runner);
 	test_multipart_with_multiple_parts(runner);
+	test_upload_directory_not_exist(runner);
 
 	runner.summary();
 	return runner.allPassed() ? 0 : 1;

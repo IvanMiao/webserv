@@ -11,10 +11,12 @@ namespace wsv
 LocationConfig::LocationConfig() 
 	: path("/") 
 	, root("") 
+	, alias("")
 	, index("index.html") 
 	, autoindex(false) 
 	, redirect_code(0) 
 	, upload_enable(false) 
+	, client_max_body_size(0)
 { 
 	allow_methods.push_back("GET"); 
 }
@@ -37,38 +39,67 @@ ServerConfig::ServerConfig()
 	, client_max_body_size(1048576)
 { }
 
-const LocationConfig* ServerConfig::findLocation(const std::string& path) const
+const LocationConfig* ServerConfig::findLocation(const std::string& uri) const
 {
-	const LocationConfig* best_match = NULL;
-	size_t best_length = 0;
+	// Step 1: Normalize the path (ensure consistency)
+	std::string normalized_uri = uri;
 	
-	// Find longest prefix match
-	for (size_t i = 0; i < locations.size(); i++)
+	// If the path ends with '/' and is not the root, remove the trailing slash for matching
+	// e.g., /directory/ -> /directory
+	if (normalized_uri.length() > 1 && 
+		normalized_uri[normalized_uri.length() - 1] == '/')
 	{
-		const LocationConfig& loc = locations[i];
-		const std::string& loc_path = loc.path;
-		
-		// Check if it's a prefix match
-		if (path.size() >= loc_path.size() &&
-			path.substr(0, loc_path.size()) == loc_path)
+		normalized_uri = normalized_uri.substr(0, normalized_uri.length() - 1);
+	}
+	
+	// Step 2: Exact match (highest priority)
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		if (locations[i].path == normalized_uri || 
+			locations[i].path == uri)  // also try the original URI
 		{
-			// Ensure it's a full path match
-			// 1. If loc_path ends with '/' (e.g., "/" or "/images/"), prefix match is enough
-			// 2. Otherwise, it must be an exact match, or the next character in path must be '/' (e.g., "/upload" matches "/upload/file")
-			if ((!loc_path.empty() && loc_path[loc_path.size() - 1] == '/') || 
-				path.size() == loc_path.size() || 
-				path[loc_path.size()] == '/')
+			return &locations[i];
+		}
+	}
+	
+	// Step 3: Prefix match (prefer the longest matching prefix)
+	const LocationConfig* best_match = NULL;
+	size_t best_match_length = 0;
+	
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		const std::string& loc_path = locations[i].path;
+		
+		// Check for prefix match
+		if (uri.find(loc_path) == 0)
+		{
+			// Ensure matching a complete path segment
+			// /directory/ should match /directory/nop
+			// but should not match /directoryabc
+			
+			if (loc_path.length() == uri.length() ||
+				uri[loc_path.length()] == '/')
 			{
-				if (loc_path.size() > best_length)
+				if (loc_path.length() > best_match_length)
 				{
-					best_length = loc_path.size();
-					best_match = &loc;
+					best_match = &locations[i];
+					best_match_length = loc_path.length();
 				}
 			}
 		}
 	}
 	
-	return best_match;
+	if (best_match)
+		return best_match;
+	
+	// Step 4: Return the default location (/)
+	for (size_t i = 0; i < locations.size(); ++i)
+	{
+		if (locations[i].path == "/")
+			return &locations[i];
+	}
+	
+	return NULL;
 }
 
 // ==================== ConfigParser ====================
@@ -213,6 +244,8 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 									 ServerConfig& server)
 {
 	LocationConfig location;
+	// Inherit client_max_body_size from server
+	location.client_max_body_size = server.client_max_body_size;
 	
 	// Extract path: location /uploads {
 	std::string value = line.substr(8);  // Skip "location"
@@ -255,6 +288,13 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 			std::string value = line.substr(4);
 			value = StringUtils::trim(value);
 			location.root = StringUtils::removeSemicolon(value);
+		}
+		// alias /var/www/uploads;
+		else if (StringUtils::startsWith(line, "alias"))
+		{
+			std::string value = line.substr(5);
+			value = StringUtils::trim(value);
+			location.alias = StringUtils::removeSemicolon(value);
 		}
 		// allow_methods GET POST DELETE;
 		else if (StringUtils::startsWith(line, "allow_methods") || 
@@ -336,6 +376,14 @@ void ConfigParser::_parseLocationBlock(std::ifstream& file, std::string& line,
 			std::string value = line.substr(8);
 			value = StringUtils::trim(value);
 			location.cgi_path = StringUtils::removeSemicolon(value);
+		}
+		// client_max_body_size 100;
+		else if (StringUtils::startsWith(line, "client_max_body_size"))
+		{
+			std::string value = line.substr(20);
+			value = StringUtils::trim(value);
+			value = StringUtils::removeSemicolon(value);
+			location.client_max_body_size = StringUtils::parseSize(value);
 		}
 	}
 	
