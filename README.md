@@ -1,10 +1,5 @@
 # webserv
-A Nginx-like webserv in C++
-
-## TODO
-
-1. HttpRequest -> _tryParseHeaders:
-	`line_end > MAX_HEADER_SIZE` should also check the total header's length
+A Nginx-like webserver in C++
 
 ## Workflow
 
@@ -14,7 +9,7 @@ A Nginx-like webserv in C++
 	`root`
 	- Location Context: `allow_methods`, `root`, `autoindex`, `return`(redirection), CGI conf
 
-2. choose `epoll`
+2. use `epoll`
 
 3. HTTP Request & Response specification
 	- [RFC 7230](https://datatracker.ietf.org/doc/html/rfc7230)
